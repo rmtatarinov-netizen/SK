@@ -9,6 +9,7 @@ from __future__ import annotations
 
 EXTRACT_FIELDS_VERSION = "extract_fields_v1"
 EXTRACT_NORM_REFS_VERSION = "extract_norm_refs_v1"
+RECOMMEND_NORMS_VERSION = "recommend_norms_v1"
 
 _JSON_GUARD = "Ответь ТОЛЬКО валидным JSON без пояснений и markdown."
 
@@ -66,3 +67,38 @@ def extract_norm_refs_prompt(text: str) -> str:
 
 ТЕКСТ:
 \"\"\"{text}\"\"\""""
+
+
+def recommend_norms_prompt(item_text: str, fragments: list[dict]) -> str:
+    """LLM выбирает подходящие пункты норм ТОЛЬКО из переданных RAG-фрагментов.
+
+    LLM не имеет права выдавать ссылку, отсутствующую в загрузке; поэтому он
+    выбирает по index фрагмента, а нормативный код берётся из метаданных
+    фрагмента, а не из ответа модели.
+    """
+    enumerated = "\n".join(
+        f'[{i}] ({frag.get("doc_code", "?")} '
+        f'{"п." + str(frag.get("item")) if frag.get("item") else ""}): '
+        f'{frag.get("text", "")}'
+        for i, frag in enumerate(fragments)
+    )
+    return f"""Подбери к пункту предписания релевантные фрагменты нормативных документов.
+
+Используй ТОЛЬКО фрагменты из списка ниже (по их номерам [i]). Не придумывай
+свои ссылки, документы или пункты. Если ни один фрагмент не подходит — верни
+пустые matches. Выбери не более 3 релевантных.
+
+Пункт предписания:
+\"\"\"{item_text}\"\"\"
+
+Фрагменты нормативной базы:
+{enumerated}
+
+Верни JSON по схеме:
+{{
+  "matches": [
+    {{"index": integer, "reason": string}}
+  ]
+}}
+
+- { _JSON_GUARD }"""

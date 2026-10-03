@@ -1,2 +1,5 @@
 # RAG-зависимости (Шаг 7).
-chromadb==0.5.20
+# chromadb 1.0.15: релизы 0.5.x/0.6.x пинят chroma-hnswlib==0.7.6, для которого
+# нет бинарных wheel под CPython 3.12 Windows (требует MSVC Build Tools).
+# В 1.x hnswlib исключён из runtime-зависимостей (претёрстенные rust-биндинги).
+chromadb==1.0.15
