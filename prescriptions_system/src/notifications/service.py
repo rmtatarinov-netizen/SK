@@ -25,6 +25,16 @@ from src.notifications.templates import render_message
 
 SEND_BEFORE_CONFIRMATION_KEY = "send_notifications_before_confirmation"
 
+# События, которые легитимно повторяются для одного предписания
+# (первое устранение=1, возврат=2, повторное устранение=3 …): версия растёт.
+# Одноразовые события всегда идут с event_version=1: повторная обработка
+# того же события не создаёт дубль (уникальный ключ + проверка в outbox).
+CYCLING_EVENTS = {
+    NotificationEvent.RETURNED_TO_IN_WORK,
+    NotificationEvent.STATUS_CHANGED_TO_FIXED_PENDING_REVIEW,
+    NotificationEvent.ATTACHMENT_ADDED,
+}
+
 
 def contractor_notifications_allowed(
     db: Session, prescription: Prescription
@@ -124,13 +134,34 @@ def create_notification_outbox_records(
     event: NotificationEvent,
     comment: str | None = None,
 ) -> int:
-    """Записать pending-уведомления в текущей транзакции (без commit)."""
+    """Записать pending-уведомления в текущей транзакции (без commit).
+
+    Дедупликация: запись с уникальным ключом
+    (prescription_id, event_type, recipient_type, recipient_id,
+    event_version) создаётся один раз.
+    """
+    from src.db.repositories import find_notification_by_key
+
     message_text = render_message(event, prescription, comment)
     version = None
     created = 0
     for recipient_type, recipient_id in resolve_recipients(db, prescription, event):
         if version is None:
-            version = next_event_version(db, prescription, event)
+            version = (
+                next_event_version(db, prescription, event)
+                if event in CYCLING_EVENTS
+                else 1
+            )
+        existing = find_notification_by_key(
+            db,
+            prescription_id=prescription.id,
+            event_type=event,
+            recipient_type=recipient_type,
+            recipient_id=recipient_id,
+            event_version=version,
+        )
+        if existing is not None:
+            continue
         db.add(
             Notification(
                 prescription_id=prescription.id,
