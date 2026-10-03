@@ -14,9 +14,15 @@ from src.config import get_settings
 @cache
 def get_engine() -> Engine:
     settings = get_settings()
-    engine = create_engine(settings.sqlalchemy_url, echo=settings.app.debug)
+    url = settings.sqlalchemy_url
+    connect_args = (
+        {"check_same_thread": False}
+        if url.startswith("sqlite")
+        else {}
+    )
+    engine = create_engine(url, echo=settings.app.debug, connect_args=connect_args)
 
-    if settings.sqlalchemy_url.startswith("sqlite"):
+    if url.startswith("sqlite"):
 
         @event.listens_for(engine, "connect")
         def _set_sqlite_pragma(dbapi_connection, connection_record):

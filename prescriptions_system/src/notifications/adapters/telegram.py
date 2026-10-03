@@ -24,7 +24,9 @@ class TelegramAdapter:
         if bot_token is None:
             bot_token = get_settings().telegram_bot_token
         self.bot_token = (bot_token or "").strip()
-        self.api_base = (api_base or DEFAULT_API_BASE).rstrip("/")
+        self.api_base = (
+            api_base or get_settings().telegram_api_base or DEFAULT_API_BASE
+        ).rstrip("/")
         self.timeout_s = timeout_s
 
     def is_available(self) -> bool:

@@ -27,7 +27,7 @@ class TelegramTransport:
         self,
         bot_token: str | None = None,
         *,
-        api_base: str = API_BASE,
+        api_base: str | None = None,
         timeout_s: int = 60,
     ) -> None:
         if bot_token is None:
@@ -37,7 +37,9 @@ class TelegramTransport:
                 "TELEGRAM_BOT_TOKEN не задан (.env). Бот не может работать."
             )
         self.bot_token = bot_token
-        self.api_base = api_base.rstrip("/")
+        self.api_base = (
+            api_base or get_settings().telegram_api_base or API_BASE
+        ).rstrip("/")
         self.timeout_s = timeout_s
 
     def _call(self, method: str, **params: Any) -> Any:

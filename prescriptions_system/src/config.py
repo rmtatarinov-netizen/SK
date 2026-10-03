@@ -96,6 +96,7 @@ class Settings(BaseSettings):
     # Секреты только из .env / переменных окружения.
     web_secret_key: str = "change-me-in-env"
     telegram_bot_token: str | None = None
+    telegram_api_base: str = "https://api.telegram.org"
     max_api_base_url: str | None = None
     max_api_token: str | None = None
 
