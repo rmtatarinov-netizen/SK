@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 from typing import Iterator
 
 import pytest
@@ -115,3 +116,41 @@ def prescription(db: Session, obj: m.Object, contractor: m.Contractor) -> m.Pres
     db.commit()
     db.refresh(p)
     return p
+
+
+@pytest.fixture()
+def tmp_storage(tmp_path, monkeypatch):
+    """Перенос файловых каталогов print/scan сервисов в tmp_path."""
+    from types import SimpleNamespace
+
+    from src.prescriptions import print_service, signed_scan_service
+
+    class FakeSettings:
+        storage = SimpleNamespace(storage="storage", uploads="uploads")
+
+        def resolve_path(self, relative):
+            p = Path(relative)
+            return p if p.is_absolute() else tmp_path / p
+
+    fake = FakeSettings()
+    monkeypatch.setattr(print_service, "get_settings", lambda: fake)
+    monkeypatch.setattr(signed_scan_service, "get_settings", lambda: fake)
+    return tmp_path
+
+
+@pytest.fixture()
+def internal_prescription(db, obj, contractor, admin) -> m.Prescription:
+    from src.prescriptions.schemas import PrescriptionCreate
+    from src.prescriptions.service import create_prescription
+
+    data = PrescriptionCreate(
+        prescription_type=m.PrescriptionType.INTERNAL,
+        doc_number="ВН-3/2026",
+        doc_date=date(2026, 9, 2),
+        object_id=obj.id,
+        contractor_id=contractor.id,
+        description="Отсутствует ограждение перепада высот.",
+        deadline=date(2026, 9, 15),
+        items=[{"text": "Установить ограждение", "deadline": None}],
+    )
+    return create_prescription(db, data, actor_user_id=admin.id)

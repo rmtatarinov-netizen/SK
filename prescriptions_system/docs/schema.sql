@@ -122,6 +122,8 @@ CREATE TABLE prescriptions (
 	status VARCHAR(20) NOT NULL, 
 	source_file_path VARCHAR(500), 
 	source_file_hash VARCHAR(64), 
+	signed_scan_attachment_id INTEGER, 
+	signed_scan_verified_at DATETIME, 
 	ocr_text TEXT, 
 	ocr_confidence FLOAT, 
 	requires_review BOOLEAN NOT NULL, 
@@ -138,6 +140,7 @@ CREATE TABLE prescriptions (
 	CONSTRAINT fk_prescriptions_contractor FOREIGN KEY(contractor_id) REFERENCES contractors (id), 
 	CONSTRAINT fk_prescriptions_responsible_user FOREIGN KEY(responsible_user_id) REFERENCES users (id), 
 	CONSTRAINT fk_prescriptions_inspector_user FOREIGN KEY(inspector_user_id) REFERENCES users (id), 
+	CONSTRAINT fk_prescriptions_signed_scan FOREIGN KEY(signed_scan_attachment_id) REFERENCES prescription_attachments (id), 
 	CONSTRAINT fk_prescriptions_confirmed_by FOREIGN KEY(confirmed_by_user_id) REFERENCES users (id), 
 	CONSTRAINT fk_prescriptions_closed_by FOREIGN KEY(closed_by_user_id) REFERENCES users (id), 
 	CONSTRAINT fk_prescriptions_created_by FOREIGN KEY(created_by_user_id) REFERENCES users (id)
@@ -150,6 +153,7 @@ CREATE INDEX ix_prescriptions_doc_number ON prescriptions (doc_number);
 CREATE INDEX ix_prescriptions_inspector_user_id ON prescriptions (inspector_user_id);
 CREATE INDEX ix_prescriptions_object_id ON prescriptions (object_id);
 CREATE INDEX ix_prescriptions_responsible_user_id ON prescriptions (responsible_user_id);
+CREATE INDEX ix_prescriptions_signed_scan_attachment_id ON prescriptions (signed_scan_attachment_id);
 CREATE INDEX ix_prescriptions_status_deadline ON prescriptions (status, deadline);
 
 CREATE TABLE user_role_change_log (
@@ -237,6 +241,23 @@ CREATE TABLE prescription_items (
 );
 CREATE INDEX ix_prescription_items_prescription_id ON prescription_items (prescription_id);
 
+CREATE TABLE prescription_print_versions (
+	id INTEGER NOT NULL, 
+	prescription_id INTEGER NOT NULL, 
+	version_number INTEGER NOT NULL, 
+	file_path VARCHAR(500) NOT NULL, 
+	file_hash VARCHAR(64) NOT NULL, 
+	created_by_user_id INTEGER, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_print_version_number UNIQUE (prescription_id, version_number), 
+	CONSTRAINT fk_print_versions_prescription FOREIGN KEY(prescription_id) REFERENCES prescriptions (id), 
+	CONSTRAINT fk_print_versions_created_by FOREIGN KEY(created_by_user_id) REFERENCES users (id)
+);
+CREATE INDEX ix_prescription_print_versions_created_by_user_id ON prescription_print_versions (created_by_user_id);
+CREATE INDEX ix_prescription_print_versions_file_hash ON prescription_print_versions (file_hash);
+CREATE INDEX ix_prescription_print_versions_prescription_id ON prescription_print_versions (prescription_id);
+
 CREATE TABLE processed_files (
 	id INTEGER NOT NULL, 
 	sha256 VARCHAR(64) NOT NULL, 
@@ -272,6 +293,7 @@ CREATE TABLE prescription_attachments (
 	kind VARCHAR(5) NOT NULL, 
 	file_path VARCHAR(500) NOT NULL, 
 	file_hash VARCHAR(64) NOT NULL, 
+	print_version_id INTEGER, 
 	size_bytes INTEGER, 
 	caption VARCHAR(500), 
 	uploaded_by_user_id INTEGER, 
@@ -279,11 +301,13 @@ CREATE TABLE prescription_attachments (
 	PRIMARY KEY (id), 
 	CONSTRAINT fk_attachments_prescription FOREIGN KEY(prescription_id) REFERENCES prescriptions (id), 
 	CONSTRAINT fk_attachments_item FOREIGN KEY(item_id) REFERENCES prescription_items (id), 
+	CONSTRAINT fk_attachments_print_version FOREIGN KEY(print_version_id) REFERENCES prescription_print_versions (id), 
 	CONSTRAINT fk_attachments_uploaded_by FOREIGN KEY(uploaded_by_user_id) REFERENCES users (id)
 );
 CREATE INDEX ix_prescription_attachments_file_hash ON prescription_attachments (file_hash);
 CREATE INDEX ix_prescription_attachments_item_id ON prescription_attachments (item_id);
 CREATE INDEX ix_prescription_attachments_prescription_id ON prescription_attachments (prescription_id);
+CREATE INDEX ix_prescription_attachments_print_version_id ON prescription_attachments (print_version_id);
 CREATE INDEX ix_prescription_attachments_uploaded_by_user_id ON prescription_attachments (uploaded_by_user_id);
 
 CREATE TABLE prescription_norm_refs (

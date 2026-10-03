@@ -230,6 +230,15 @@ class Prescription(Base):
     )
     source_file_path: Mapped[str | None] = mapped_column(String(500))
     source_file_hash: Mapped[str | None] = mapped_column(String(64))
+    signed_scan_attachment_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "prescription_attachments.id",
+            name="fk_prescriptions_signed_scan",
+            use_alter=True,
+        ),
+        index=True,
+    )
+    signed_scan_verified_at: Mapped[datetime | None] = mapped_column(DateTime)
     ocr_text: Mapped[str | None] = mapped_column(Text)
     ocr_confidence: Mapped[float | None] = mapped_column(Float)
     requires_review: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -274,9 +283,14 @@ class Prescription(Base):
     norm_refs: Mapped[list[PrescriptionNormRef]] = relationship(
         back_populates="prescription", cascade="all, delete-orphan"
     )
-    attachments: Mapped[list[PrescriptionAttachment]] = relationship()
+    attachments: Mapped[list[PrescriptionAttachment]] = relationship(
+        foreign_keys="PrescriptionAttachment.prescription_id"
+    )
     history: Mapped[list[PrescriptionHistory]] = relationship()
     notifications: Mapped[list[Notification]] = relationship()
+    print_versions: Mapped[list[PrescriptionPrintVersion]] = relationship(
+        back_populates="prescription", cascade="all, delete-orphan"
+    )
 
     @property
     def suggested_norm_refs(self) -> list[PrescriptionNormRef]:
@@ -411,12 +425,50 @@ class PrescriptionAttachment(Base):
     )
     file_path: Mapped[str] = mapped_column(String(500))
     file_hash: Mapped[str] = mapped_column(String(64), index=True)
+    print_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "prescription_print_versions.id",
+            name="fk_attachments_print_version",
+        ),
+        index=True,
+    )
     size_bytes: Mapped[int | None] = mapped_column(Integer)
     caption: Mapped[str | None] = mapped_column(String(500))
     uploaded_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", name="fk_attachments_uploaded_by"), index=True
     )
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class PrescriptionPrintVersion(Base):
+    """Неизменяемая печатная версия внутреннего предписания.
+
+    Новая редакция создаёт новую версию; существующие файлы не перезаписываются.
+    """
+
+    __tablename__ = "prescription_print_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "prescription_id", "version_number", name="uq_print_version_number"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    prescription_id: Mapped[int] = mapped_column(
+        ForeignKey("prescriptions.id", name="fk_print_versions_prescription"),
+        index=True,
+    )
+    version_number: Mapped[int] = mapped_column(Integer, default=1)
+    file_path: Mapped[str] = mapped_column(String(500))
+    file_hash: Mapped[str] = mapped_column(String(64), index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", name="fk_print_versions_created_by"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    prescription: Mapped[Prescription] = relationship(
+        back_populates="print_versions"
+    )
 
 
 class PrescriptionHistory(Base):
