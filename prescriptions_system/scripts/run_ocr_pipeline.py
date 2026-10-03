@@ -23,6 +23,7 @@ from sqlalchemy import select  # noqa: E402
 
 from src.db.engine import get_session_factory  # noqa: E402
 from src.db.models import Contractor, Object  # noqa: E402
+from src.observability import configure_logging  # noqa: E402
 from src.ocr.pipeline import run_pipeline  # noqa: E402
 
 
@@ -44,10 +45,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    configure_logging("ocr_pipeline")
 
     db = get_session_factory()()
     try:

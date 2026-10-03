@@ -1,4 +1,4 @@
-"""Запуск воркера доставки уведомлений (Шаг 8).
+"""Запуск воркера доставки уведомлений (Шаг 8; лог — Шаг 12).
 
 Один цикл:      python scripts/run_notification_worker.py --once
 Постоянный:     python scripts/run_notification_worker.py --interval 5
@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import sys
 from pathlib import Path
 
@@ -19,21 +18,7 @@ from src.notifications.worker import (  # noqa: E402
     process_pending_notifications,
     run_forever,
 )
-
-
-class JsonFormatter(logging.Formatter):
-    def format(self, record: logging.LogRecord) -> str:
-        payload = {
-            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-        }
-        for key in ("notification_id", "attempt", "status", "channel", "external_message_id"):
-            value = getattr(record, key, None)
-            if value is not None:
-                payload[key] = value
-        return json.dumps(payload, ensure_ascii=False)
+from src.observability import configure_logging  # noqa: E402
 
 
 def main() -> int:
@@ -42,11 +27,7 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=5.0, help="пауза, сек")
     args = parser.parse_args()
 
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    root.addHandler(handler)
+    configure_logging("notification_worker")
 
     if args.once:
         db = get_session_factory()()

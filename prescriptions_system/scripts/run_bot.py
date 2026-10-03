@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.bots.telegram_bot import run_polling  # noqa: E402
+from src.observability import configure_logging  # noqa: E402
 
 
 def main() -> int:
@@ -24,10 +25,7 @@ def main() -> int:
     parser.add_argument("--cycles", type=int, default=None, help="остановить после N циклов опроса")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    configure_logging("telegram_bot")
     try:
         processed = run_polling(stop_after_cycles=args.cycles)
     except RuntimeError as exc:
