@@ -43,10 +43,15 @@ Linux/macOS: `./scripts/setup_local.sh`, `./scripts/pull_models.sh`.
 Фоновые процессы:
 
 ```powershell
+python scripts\run_web.py                                 # веб-интерфейс (http://127.0.0.1:8000)
 python scripts\run_notification_worker.py --interval 5   # доставка уведомлений
 python scripts\run_bot.py                                 # Telegram-бот (long polling)
 python scripts\run_ocr_pipeline.py                        # пакетное распознавание inbox
 ```
+
+Роли в веб-интерфейсе: инспектор/админ — полный доступ (правку данных подрядчик
+не видит); подрядчик — реестр/карточка своих, смена статуса, вложения, комментарии.
+Первый вход по временному паролю принудительно ведёт на смену пароля.
 
 ## Конфигурация
 

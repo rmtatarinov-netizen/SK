@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}{{ p.doc_number }}{% endblock %}
+{% block content %}
+<h1>Предписание № {{ p.doc_number }} от {{ p.doc_date }}
+  {% if is_overdue %}<span class="badge red">просрочен</span>{% endif %}
+  {% if p.requires_review %}<span class="badge">нужна проверка</span>{% endif %}
+  {% if p.confirmed_at %}<span class="badge green">подтверждено</span>{% endif %}
+</h1>
+<p>
+  Тип: {{ p.prescription_type.value }} ·
+  Объект: {{ p.object.name if p.object else '—' }} ·
+  Подрядчик: {{ p.contractor.name if p.contractor else '—' }} ·
+  Статус: <b>{{ status_labels[p.status.value] }}</b> ·
+  Срок: {{ p.deadline or 'не задан' }}
+</p>
+
+<div class="grid">
+  <div>
+    <div class="panel">
+      <h2>Данные</h2>
+      {% if can_edit %}
+      <form method="post" action="/prescriptions/{{ p.id }}/data">
+        <label>Описание <textarea name="description" rows="4" cols="60">{{ p.description }}</textarea></label>
+        <label>Срок <input type="date" name="deadline" value="{{ p.deadline or '' }}"></label>
+        {% for item in p.items %}
+          <label>Пункт {{ item.item_number }} <textarea name="item_{{ item.id }}" rows="2" cols="60">{{ item.text }}</textarea></label>
+        {% endfor %}
+        <button type="submit">Сохранить данные</button>
+      </form>
+      {% else %}
+      <p>{{ p.description }}</p>
+      <ol>{% for item in p.items %}<li>{{ item.text }}{% if item.deadline %} · срок {{ item.deadline }}{% endif %}</li>{% endfor %}</ol>
+      {% endif %}
+      {% if p.source_file_path %}<p class="muted">Оригинал: {{ p.source_file_path }}</p>{% endif %}
+    </div>
+
+    <div class="panel">
+      <h2>Статус</h2>
+      {% if transitions %}
+      <form method="post" action="/prescriptions/{{ p.id }}/status">
+        <div class="field"><label>Новый статус
+          <select name="new_status">
+            {% for t in transitions %}<option value="{{ t.value }}">{{ status_labels[t.value] }}{% if t.comment_required %} (комментарий обязателен){% endif %}</option>{% endfor %}
+          </select></label></div>
+        <div class="field"><label>Комментарий <input name="comment" size="40"></label></div>
+        <button type="submit">Изменить статус</button>
+      </form>
+      {% else %}<p class="muted">Нет доступных переходов для вашей роли.</p>{% endif %}
+      {% if p.prescription_type.value == 'customer' and p.requires_review and not p.confirmed_at %}
+      <form method="post" action="/prescriptions/{{ p.id }}/confirm" style="margin-top:10px">
+        <button type="submit">Подтвердить регистрацию (данные проверены)</button>
+      </form>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <h2>Вложения</h2>
+      <ul>
+        {% for a in attachments %}
+          <li>{{ a.kind.value }} · {{ a.caption or a.file_path }} ({{ a.file_hash[:10] }})</li>
+        {% else %}<li class="muted">Нет вложений.</li>{% endfor %}
+      </ul>
+      {% if can_add_attachment %}
+      <form method="post" action="/prescriptions/{{ p.id }}/attachments" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <input name="caption" placeholder="подпись" size="24">
+        <button type="submit">Прикрепить</button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% if p.prescription_type.value == 'internal' and p.status.value == 'draft_for_signature' %}
+    <div class="panel">
+      <h2>Печать и подписной скан</h2>
+      {% if can_edit %}
+      <form method="post" action="/prescriptions/{{ p.id }}/print-version">
+        <button type="submit">Сформировать печатную версию</button>
+      </form>
+      {% endif %}
+      <ul>
+        {% for v in print_versions %}
+          <li>v{{ v.version_number }} · sha {{ v.file_hash[:10] }} · {{ v.created_at }}
+            {% if can_edit %}<a href="/prescriptions/{{ p.id }}/print?version_id={{ v.id }}">Печать</a>{% endif %}
+          </li>
+        {% else %}<li class="muted">Печатная версия не сформирована.</li>{% endfor %}
+      </ul>
+      {% if can_upload_scan %}
+      <form method="post" action="/prescriptions/{{ p.id }}/signed-scan" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <button type="submit">Загрузить подписанный скан</button>
+      </form>
+      <form method="post" action="/prescriptions/{{ p.id }}/verify-scan" style="margin-top:6px">
+        <button type="submit" class="secondary">Проверить скан</button>
+      </form>
+      {% if p.signed_scan_verified_at %}<p class="muted">Скан проверен {{ p.signed_scan_verified_at }} — зарегистрируйте предписание переходом в «Новое».</p>{% endif %}
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>Нормативные ссылки</h2>
+      {% set suggested = p.suggested_norm_refs %}
+      {% if suggested %}
+      <form method="post" action="/prescriptions/{{ p.id }}/norms/confirm">
+        {% for ref in suggested %}
+          <label><input type="checkbox" name="ref_ids" value="{{ ref.id }}">
+            {{ ref.doc_code }} {{ ref.doc_item or '' }} · {{ ref.source.value }}
+            {% if ref.fragment %}<div class="muted">{{ ref.fragment[:160] }}</div>{% endif %}
+          </label><br>
+        {% endfor %}
+        <button type="submit">Подтвердить выбранные</button>
+      </form>
+      {% else %}<p class="muted">Предложений нет.</p>{% endif %}
+      {% set confirmed = p.confirmed_norm_refs %}
+      {% if confirmed %}
+      <h3>Подтверждено инспектором:</h3>
+      <ul>{% for ref in confirmed %}<li>{{ ref.doc_code }} {{ ref.doc_item or '' }}{% if ref.confirmed_by %} · {{ ref.confirmed_by.full_name }}{% endif %}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if can_edit %}
+      <h3>Подбор норм по пункту (RAG)</h3>
+      {% for item in p.items %}
+      <form method="post" action="/prescriptions/{{ p.id }}/items/{{ item.id }}/suggest-norms" class="inline">
+        <button type="submit" class="secondary">Подобрать к п.{{ item.item_number }}</button>
+      </form>
+      {% endfor %}
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <h2>История изменений</h2>
+      <table>
+        <thead><tr><th>Когда</th><th>Кто</th><th>Действие</th><th>Комментарий</th></tr></thead>
+        <tbody>
+        {% for h in history %}
+          <tr><td>{{ h.created_at }}</td><td>{{ h.changed_by_user_id or 'система' }}</td><td>{{ h.change_type }}</td><td>{{ h.comment or '' }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>Уведомления</h2>
+      <table>
+        <thead><tr><th>Событие</th><th>Получатель</th><th>Канал</th><th>Статус</th><th>Попытки</th></tr></thead>
+        <tbody>
+        {% for n in notifications %}
+          <tr><td>{{ n.event_type.value }}</td><td>{{ n.recipient_type }}#{{ n.recipient_id }}</td>
+              <td>{{ n.channel.value if n.channel else '—' }}</td><td>{{ n.status.value }}</td>
+              <td>{{ n.attempt_count }}{% if n.last_error %} · {{ n.last_error[:60] }}{% endif %}</td></tr>
+        {% else %}<tr><td colspan="5" class="muted">Нет уведомлений.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if p.ocr_text %}
+<div class="panel">
+  <h2>OCR-текст (уверенность {{ p.ocr_confidence if p.ocr_confidence is not none else '—' }})</h2>
+  <pre class="muted">{{ p.ocr_text[:2000] }}</pre>
+</div>
+{% endif %}
+{% endblock %}

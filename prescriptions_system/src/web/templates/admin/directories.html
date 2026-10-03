@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Справочники{% endblock %}
+{% block content %}
+<h1>Справочники</h1>
+<div class="grid">
+  <div class="panel">
+    <h2>Объекты</h2>
+    <ul>{% for o in objects %}<li>{{ o.name }}{% if not o.is_active %} (выключен){% endif %}</li>{% else %}<li class="muted">Пусто</li>{% endfor %}</ul>
+    <form method="post" action="/admin/directories/objects" class="card-form">
+      <label>Название <input name="name" required></label>
+      <label>Адрес <input name="address"></label>
+      <button type="submit">Добавить объект</button>
+    </form>
+  </div>
+  <div class="panel">
+    <h2>Подрядчики</h2>
+    <ul>{% for c in contractors %}<li>{{ c.name }}{% if c.inn %} · ИНН {{ c.inn }}{% endif %}</li>{% else %}<li class="muted">Пусто</li>{% endfor %}</ul>
+    <form method="post" action="/admin/directories/contractors" class="card-form">
+      <label>Название <input name="name" required></label>
+      <label>ИНН <input name="inn" maxlength="12"></label>
+      <button type="submit">Добавить подрядчика</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

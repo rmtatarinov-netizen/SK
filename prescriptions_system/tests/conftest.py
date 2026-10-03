@@ -125,7 +125,8 @@ def tmp_storage(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     from src.ocr import pipeline as ocr_pipeline
-    from src.prescriptions import print_service, signed_scan_service
+    from src.prescriptions import print_service, service as prescriptions_service
+    from src.prescriptions import signed_scan_service
 
     class FakeSettings:
         storage = SimpleNamespace(
@@ -143,6 +144,7 @@ def tmp_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(print_service, "get_settings", lambda: fake)
     monkeypatch.setattr(signed_scan_service, "get_settings", lambda: fake)
     monkeypatch.setattr(ocr_pipeline, "get_settings", lambda: fake)
+    monkeypatch.setattr(prescriptions_service, "get_settings", lambda: fake)
     return tmp_path
 
 

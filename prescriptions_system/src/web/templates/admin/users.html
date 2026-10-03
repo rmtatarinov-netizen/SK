@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Пользователи{% endblock %}
+{% block content %}
+<h1>Пользователи и роли</h1>
+
+<div class="panel">
+  <h2>Создать пользователя</h2>
+  <form method="post" action="/admin/users" class="card-form">
+    <label>Логин <input name="login" required></label>
+    <label>ФИО <input name="full_name" required></label>
+    <label>Роль <select name="role">{% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}</select></label>
+    <label>Email <input name="email"></label>
+    <label>Телефон <input name="phone"></label>
+    <label>Подрядчик <select name="contractor_id"><option value="">—</option>{% for c in contractors %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></label>
+    <label>Объект <select name="object_id"><option value="">—</option>{% for o in objects %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select></label>
+    <label>Telegram chat_id <input name="telegram_chat_id"></label>
+    <button type="submit">Создать</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Учётные записи</h2>
+  <table>
+    <thead><tr><th>Логин</th><th>ФИО</th><th>Роль</th><th>Подрядчик/объект</th><th>Активен</th><th>Смена роли</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td>{{ u.login }}</td>
+        <td>{{ u.full_name }}</td>
+        <td>{{ u.role.value }}</td>
+        <td>{{ u.contractor_id or '' }}/{{ u.object_id or '' }}</td>
+        <td>{{ 'да' if u.is_active else 'нет' }}</td>
+        <td>
+          <form method="post" action="/admin/users/{{ u.id }}/role" class="inline">
+            <select name="new_role">{% for r in roles %}<option value="{{ r }}" {% if r == u.role.value %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+            <button type="submit" class="secondary">Применить</button>
+          </form>
+        </td>
+        <td>
+          {% if u.is_active %}
+          <form method="post" action="/admin/users/{{ u.id }}/deactivate" class="inline">
+            <button type="submit" class="danger">Блок.</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>Контакты получателей (recipient_channels)</h2>
+  <table>
+    <thead><tr><th>Кого</th><th>Канал</th><th>Адрес</th><th>Предочт.</th><th>Активен</th></tr></thead>
+    <tbody>
+    {% for ch in channels %}
+      <tr><td>{{ ch.recipient_type }}#{{ ch.recipient_id }}</td><td>{{ ch.channel.value }}</td><td>{{ ch.address }}</td><td>{{ ch.is_preferred }}</td><td>{{ ch.is_active }}</td></tr>
+    {% else %}<tr><td colspan="5" class="muted">Контактов нет.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <form method="post" action="/admin/users/0/contacts" id="contact-form">
+    <label>user_id <input name="user_id_for_contact" id="cid" size="4"></label>
+    <span class="muted">(адрес: /admin/users/&lt;id&gt;/contacts — выберите id пользователя выше)</span>
+  </form>
+  {% for u in users %}
+  <form method="post" action="/admin/users/{{ u.id }}/contacts" class="inline">
+    <input type="hidden" name="user_id_hidden" value="{{ u.id }}">
+    <b>{{ u.login }}</b>:
+    <select name="channel">{% for cv in channel_values %}<option value="{{ cv }}">{{ cv }}</option>{% endfor %}</select>
+    <input name="address" placeholder="chat_id / user_id" size="16">
+    <label><input type="checkbox" name="is_preferred" value="true"> пред.</label>
+    <button type="submit" class="secondary">Сохранить</button>
+  </form><br>
+  {% endfor %}
+</div>
+{% endblock %}

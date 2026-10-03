@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Вход{% endblock %}
+{% block content %}
+<h1>Вход в систему</h1>
+<form method="post" action="/login" class="card-form">
+  <label>Логин <input name="login" required autofocus></label>
+  <label>Пароль <input name="password" type="password" required></label>
+  <button type="submit">Войти</button>
+</form>
+<p class="muted">Самостоятельная регистрация не предусмотрена — обратитесь к администратору.</p>
+{% endblock %}

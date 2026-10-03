@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}prescriptions_system{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<nav>
+  <a class="brand" href="/prescriptions">Предписания СК</a>
+  {% if user %}
+    <a href="/prescriptions">Реестр</a>
+    {% if user.role.value in ('inspector', 'admin') %}<a href="/prescriptions/new">+ Создать</a>{% endif %}
+    {% if user.role.value == 'admin' %}
+      <a href="/admin/users">Пользователи</a>
+      <a href="/admin/directories">Справочники</a>
+    {% endif %}
+    <span class="right">{{ user.full_name }} · {{ user.role.value }}
+      <form method="post" action="/logout" class="inline"><button type="submit">Выйти</button></form>
+    </span>
+  {% endif %}
+</nav>
+{% for f in flashes %}<div class="flash">{{ f }}</div>{% endfor %}
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

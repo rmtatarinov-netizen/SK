@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import select
@@ -19,10 +19,12 @@ from sqlalchemy.orm import Session
 from src.config import get_settings
 from src.db.models import (
     AttachmentKind,
+    NormRefStatus,
     Prescription,
     PrescriptionAttachment,
     PrescriptionHistory,
     PrescriptionItem,
+    PrescriptionNormRef,
     PrescriptionStatus,
     PrescriptionType,
     User,
@@ -454,3 +456,97 @@ def add_comment(
     db.commit()
     db.refresh(entry)
     return entry
+
+
+def update_prescription_data(
+    db: Session,
+    prescription: Prescription,
+    *,
+    actor_user_id: int,
+    description: str | None = None,
+    deadline: date | None = ...,  # sentinel: пропуск, если не передан
+    item_updates: dict[int, str] | None = None,
+) -> Prescription:
+    """Правка данных предписания инспектором/администратором (Шаг 9).
+
+    Подрядчик данные не изменяет (только статус и вложения) — правило ТЗ.
+    """
+    actor = db.get(User, actor_user_id)
+    if actor is None or not actor.is_active:
+        raise PermissionError("Пользователь не найден или неактивен")
+    if actor.role not in (UserRole.INSPECTOR, UserRole.ADMIN):
+        raise PermissionError("Данные предписания правит инспектор или администратор")
+
+    changed: dict = {}
+
+    if description is not None and description.strip() != prescription.description:
+        changed["description"] = {
+            "old": prescription.description[:200],
+            "new": description.strip()[:200],
+        }
+        prescription.description = description.strip()
+
+    if deadline is not ... and deadline != prescription.deadline:
+        changed["deadline"] = {
+            "old": prescription.deadline.isoformat() if prescription.deadline else None,
+            "new": deadline.isoformat() if deadline else None,
+        }
+        prescription.deadline = deadline
+
+    for item_id, text in (item_updates or {}).items():
+        item = db.get(PrescriptionItem, item_id)
+        if item is None or item.prescription_id != prescription.id:
+            raise ValueError(f"Пункт {item_id} не принадлежит предписанию")
+        if text.strip() != item.text:
+            changed[f"item:{item_id}"] = {"old": item.text[:200], "new": text.strip()[:200]}
+            item.text = text.strip()
+
+    if changed:
+        _add_history(
+            db,
+            prescription_id=prescription.id,
+            actor_id=actor.id,
+            change_type="data_updated",
+            new_value=changed,
+        )
+        db.commit()
+        db.refresh(prescription)
+    return prescription
+
+
+def confirm_norm_refs(
+    db: Session,
+    prescription: Prescription,
+    ref_ids: list[int],
+    *,
+    actor_user_id: int,
+) -> int:
+    """Инспектор подтверждает нормативные ссылки (suggested → confirmed)."""
+    actor = db.get(User, actor_user_id)
+    if actor is None or not actor.is_active:
+        raise PermissionError("Пользователь не найден или неактивен")
+    if actor.role not in (UserRole.INSPECTOR, UserRole.ADMIN):
+        raise PermissionError("Нормативные ссылки подтверждает инспектор или администратор")
+
+    confirmed = 0
+    for ref_id in ref_ids:
+        ref = db.get(PrescriptionNormRef, ref_id)
+        if ref is None or ref.prescription_id != prescription.id:
+            raise ValueError("Ссылка не найдена или принадлежит другому предписанию")
+        if ref.status == NormRefStatus.CONFIRMED:
+            continue
+        ref.status = NormRefStatus.CONFIRMED
+        ref.confirmed_by_user_id = actor.id
+        ref.confirmed_at = _now()
+        confirmed += 1
+
+    if confirmed:
+        _add_history(
+            db,
+            prescription_id=prescription.id,
+            actor_id=actor.id,
+            change_type="norm_refs_confirmed",
+            new_value={"ref_ids": ref_ids, "confirmed": confirmed},
+        )
+        db.commit()
+    return confirmed
