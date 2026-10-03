@@ -12,6 +12,7 @@
   {% if user %}
     <a href="/prescriptions">Реестр</a>
     {% if user.role.value in ('inspector', 'admin') %}<a href="/prescriptions/new">+ Создать</a>{% endif %}
+    {% if user.role.value in ('inspector', 'admin', 'manager') %}<a href="/reports">Отчёты</a>{% endif %}
     {% if user.role.value == 'admin' %}
       <a href="/admin/users">Пользователи</a>
       <a href="/admin/directories">Справочники</a>

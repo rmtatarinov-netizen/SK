@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Отчёты{% endblock %}
+{% block content %}
+<h1>Дашборд предписаний</h1>
+<p class="muted">Данные сформированы {{ data.generated_at }} · только из БД</p>
+
+<div class="grid">
+  <div class="panel">
+    <h2>Ключевые метрики</h2>
+    <table>
+      <tr><th>Всего предписаний</th><td>{{ data.total }}</td></tr>
+      <tr><th>Заказчика / внутренних</th><td>{{ data.types.get('customer', 0) }} / {{ data.types.get('internal', 0) }}</td></tr>
+      <tr><th>Просрочено</th><td>{{ data.overdue }}</td></tr>
+      <tr><th>Средний срок устранения, дн.</th><td>{{ data.average_fix_days if data.average_fix_days is not none else '—' }}</td></tr>
+      <tr><th>Среднее время до проверки, дн.</th><td>{{ data.average_review_days if data.average_review_days is not none else '—' }}</td></tr>
+      <tr><th>Возвратов на доработку</th><td>{{ data.rework_returns }}</td></tr>
+      <tr><th>Уведомления: отправлено</th><td>{{ data.notifications.sent_pct if data.notifications.sent_pct is not none else '—' }}%</td></tr>
+      <tr><th>Уведомления: ошибки доставки</th><td>{{ data.notifications.failed_pct if data.notifications.failed_pct is not none else '—' }}%</td></tr>
+    </table>
+    <p>
+      <a href="/reports/print"><button type="button" class="secondary">Версия для печати</button></a>
+      <a href="/reports/pdf"><button type="button" class="secondary">PDF</button></a>
+      <a href="/reports/export.csv"><button type="button" class="secondary">CSV</button></a>
+      <a href="/reports/export.xlsx"><button type="button" class="secondary">XLSX</button></a>
+    </p>
+  </div>
+  <div class="panel">
+    <h2>Статусы</h2>
+    <canvas id="statusChart" width="300" height="300"></canvas>
+  </div>
+  <div class="panel">
+    <h2>По подрядчикам</h2>
+    <canvas id="contractorChart" width="400" height="300"></canvas>
+  </div>
+  <div class="panel">
+    <h2>По объектам</h2>
+    <canvas id="objectChart" width="400" height="300"></canvas>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Частота нормативных пунктов (подтверждённых)</h2>
+  <table>
+    <thead><tr><th>Документ</th><th>Пункт</th><th>Частота</th></tr></thead>
+    <tbody>
+    {% for row in data.norm_frequency %}
+      <tr><td>{{ row.doc_code }}</td><td>{{ row.item or '—' }}</td><td>{{ row.count }}</td></tr>
+    {% else %}<tr><td colspan="3" class="muted">Подтверждённых ссылок пока нет.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script src="/static/vendor/chart.umd.js"></script>
+<script>
+  var DATA = {{ data_json | safe }};
+  var statusLabels = {
+    draft_for_signature: 'Черновик (на подпись)', new: 'Новое', under_review: 'На проверке',
+    in_work: 'В работе', fixed_pending_review: 'Заявлено об устранении',
+    closed: 'Закрыто', rejected: 'Отклонено'
+  };
+  var sKeys = Object.keys(DATA.statuses);
+  new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: {
+      labels: sKeys.map(function (k) { return statusLabels[k] || k; }),
+      datasets: [{ data: sKeys.map(function (k) { return DATA.statuses[k]; }) }]
+    }
+  });
+  function barChart(id, pairs, label) {
+    new Chart(document.getElementById(id), {
+      type: 'bar',
+      data: {
+        labels: pairs.map(function (r) { return r[0]; }),
+        datasets: [{ label: label, data: pairs.map(function (r) { return r[1]; }) }]
+      },
+      options: { plugins: { legend: { display: false } } }
+    });
+  }
+  barChart('contractorChart', DATA.by_contractor, 'предписаний');
+  barChart('objectChart', DATA.by_object, 'предписаний');
+</script>
+{% endblock %}

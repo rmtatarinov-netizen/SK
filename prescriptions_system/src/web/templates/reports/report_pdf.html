@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Отчёт по предписаниям — {{ data.generated_at }}</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; font-size: 12px; color: #111; margin: 24px; }
+    h1 { font-size: 18px; } h2 { font-size: 14px; margin-top: 18px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 6px; }
+    th, td { border: 1px solid #999; padding: 3px 6px; text-align: left; }
+    th { background: #eee; }
+    .meta { color: #555; }
+    @media print { body { margin: 8mm; } }
+  </style>
+</head>
+<body>
+<h1>Отчёт: предписания строительного контроля</h1>
+<p class="meta">Сформирован: {{ data.generated_at }} · источник данных — БД prescriptions_system</p>
+
+<h2>Сводка</h2>
+<table>
+  <tr><th>Всего предписаний</th><td>{{ data.total }}</td></tr>
+  <tr><th>Заказчика</th><td>{{ data.types.get('customer', 0) }}</td></tr>
+  <tr><th>Внутренних</th><td>{{ data.types.get('internal', 0) }}</td></tr>
+  <tr><th>Просрочено (открытые со сроком в прошлом)</th><td>{{ data.overdue }}</td></tr>
+  <tr><th>Средний срок устранения, дней</th><td>{{ data.average_fix_days if data.average_fix_days is not none else '—' }}</td></tr>
+  <tr><th>Среднее время до проверки, дней</th><td>{{ data.average_review_days if data.average_review_days is not none else '—' }}</td></tr>
+  <tr><th>Возвратов на доработку</th><td>{{ data.rework_returns }}</td></tr>
+  <tr><th>Уведомлений всего / отправлено % / ошибок %</th>
+      <td>{{ data.notifications.total }} / {{ data.notifications.sent_pct }}% / {{ data.notifications.failed_pct }}%</td></tr>
+</table>
+
+<h2>По статусам</h2>
+<table>
+  <tr><th>Статус</th><th>Кол-во</th></tr>
+  {% for status, count in data.statuses.items() %}<tr><td>{{ status }}</td><td>{{ count }}</td></tr>{% endfor %}
+</table>
+
+<h2>По подрядчикам</h2>
+<table>
+  <tr><th>Подрядчик</th><th>Предписаний</th></tr>
+  {% for name, count in data.by_contractor %}<tr><td>{{ name }}</td><td>{{ count }}</td></tr>{% endfor %}
+</table>
+
+<h2>По объектам</h2>
+<table>
+  <tr><th>Объект</th><th>Предписаний</th></tr>
+  {% for name, count in data.by_object %}<tr><td>{{ name }}</td><td>{{ count }}</td></tr>{% endfor %}
+</table>
+
+<h2>Частота нормативных пунктов (подтверждённых)</h2>
+<table>
+  <tr><th>Документ</th><th>Пункт</th><th>Частота</th></tr>
+  {% for row in data.norm_frequency %}
+    <tr><td>{{ row.doc_code }}</td><td>{{ row.item or '—' }}</td><td>{{ row.count }}</td></tr>
+  {% endfor %}
+</table>
+</body>
+</html>
