@@ -21,7 +21,8 @@ cd prescriptions_system
 .\.venv\Scripts\Activate.ps1
 .\scripts\pull_models.ps1       # ollama pull qwen2.5:7b-instruct, bge-m3
 Copy-Item .env.example .env      # заполнить секреты
-python -m pytest                 # смоук-тесты конфигурации
+python scripts\create_first_admin.py   # первый администратор (Шаг 3)
+python -m pytest                 # тесты конфигурации и схемы
 ```
 
 Linux/macOS: `./scripts/setup_local.sh`, `./scripts/pull_models.sh`.
