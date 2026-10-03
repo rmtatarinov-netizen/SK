@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Секреты и локальные настройки
+.env
+*.local.yaml
+
+# Данные и БД (структура каталогов сохраняется через .gitkeep)
+prescriptions_system/data/**
+!prescriptions_system/data/**/
+!prescriptions_system/data/**/*.gitkeep
+prescriptions_system/backups/
+
+# Кэш тестов и покрытия
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE и ОС
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini

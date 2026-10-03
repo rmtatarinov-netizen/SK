@@ -1,0 +1,4 @@
+# OCR-зависимости (Шаг 5). Установка проверена на Python 3.12.
+# PaddleOCR требует отдельного wheel paddlepaddle для CPU.
+paddlepaddle==2.6.2
+paddleocr==2.8.1

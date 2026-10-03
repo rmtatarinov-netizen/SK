@@ -1,0 +1,44 @@
+# Основную конфигурацию системы смотри здесь. Секреты — только в .env (см. .env.example).
+app:
+  name: prescriptions_system
+  debug: false
+
+db:
+  url: sqlite:///data/prescriptions.db
+  wal: true
+
+ollama:
+  base_url: http://localhost:11434
+  llm_model: qwen2.5:7b-instruct
+  embed_model: bge-m3
+  timeout_s: 300
+
+rag:
+  collection: norm_docs
+  persist_directory: data/chroma
+  chunk_size_tokens: 500
+  chunk_overlap_tokens: 50
+  top_k: 5
+
+ocr:
+  workspace: data/ocr_workspace
+  langs: ["ru"]
+
+storage:
+  inbox: data/prescriptions/inbox
+  processed: data/prescriptions/processed
+  storage: data/prescriptions/storage
+  uploads: data/uploads
+
+notifications:
+  max_attempts: 5
+  retry_delays_s: [60, 300, 900, 3600]
+
+web:
+  host: 127.0.0.1
+  port: 8000
+  session_max_age_s: 43200
+
+logging:
+  level: INFO
+  json_logs: true

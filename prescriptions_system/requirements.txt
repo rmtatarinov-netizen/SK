@@ -1,0 +1,33 @@
+# Ядро системы (Шаг 1). Python 3.12.
+# Дополнительные группы: requirements-ocr.txt, requirements-rag.txt, requirements-reports.txt.
+
+# Web
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+jinja2==3.1.4
+python-multipart==0.0.12
+itsdangerous==2.2.0
+
+# DB
+sqlalchemy==2.0.36
+alembic==1.14.0
+
+# Config / validation
+pydantic==2.10.4
+pydantic-settings==2.7.0
+PyYAML==6.0.2
+python-dotenv==1.0.1
+
+# Auth
+passlib==1.7.4
+bcrypt==4.0.1
+
+# HTTP (Ollama, Telegram)
+requests==2.32.3
+httpx==0.28.1
+
+# PDF текстовый быстрый путь (Шаг 5)
+PyMuPDF==1.24.14
+
+# Tests
+pytest==8.3.4
