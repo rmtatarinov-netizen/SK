@@ -80,6 +80,38 @@ scripts/              установка, модели, пайплайны, бэ
 tests/                pytest (внешние сервисы — фейки, сеть не нужна)
 ```
 
+## Статус реализации
+
+Все 14 шагов спецификации `Prompt_v2.4.md` реализованы; тесты: **176 passed**
+(`pytest -m "not e2e"` — 174, e2e-сценарий MVP включён в полный прогон).
+
+| Шаг | Что готово |
+|---|---|
+| 1–2 | каркас, конфиг, 19 таблиц, Alembic, `docs/schema.sql` |
+| 3 | пользователи/роли, первый админ, CSV-импорт, `recipient_channels` |
+| 4 | статусная машина, история, outbox, печатные версии, подписной скан |
+| 5–6 | OCR-пайплайн (SHA-256, PyMuPDF/PaddleOCR), LLM-извлечение + лог версий |
+| 7 | RAG: чанкинг норм, ChromaDB, рекомендации строго из загруженной базы |
+| 8 | доставка: router/адаптеры/outbox-воркер, бэккофф 60/300/900/3600, попытки |
+| 9 | веб (FastAPI+Jinja2, сессии, RBAC): реестр, карточка, проверка OCR/норм, админ |
+| 10 | Telegram-бот: команды + inline-кнопки из статусных правил, фото |
+| 11 | отчёты/дашборд (Chart.js локально), экспорт CSV/XLSX/PDF* |
+| 12 | бэкап/восстановление с проверкой, JSON-логи, `docs/reliability.md` |
+| 13 | сквозной MVP-тест + критерии готовности |
+| 14 | MAX/STT — контракты и заглушки, `docs/max_contract.md` (*PDF требует GTK-библиотек WeasyPrint; всегда доступен HTML-печать-вид) |
+
+## Чек-лист боевого запуска
+
+1. `.\scripts\pull_models.ps1` — скачать `qwen2.5:7b-instruct` и `bge-m3` (~6 ГБ).
+2. Для сканов (не текстовых PDF): `pip install -r requirements-ocr.txt` (PaddleOCR ~600 МБ).
+3. Заполнить `.env`: `WEB_SECRET_KEY`, `TELEGRAM_BOT_TOKEN` (MAX — по факту API, Шаг 14).
+4. `python scripts\create_first_admin.py` (или env-режим).
+5. Загрузить нормы: `python scripts\load_norms.py docs\priors\ --pattern "*.pdf"`.
+6. Сервисы: `python scripts\run_web.py`, `python scripts\run_notification_worker.py`,
+   `python scripts\run_bot.py`; OCR по расписанию: `python scripts\run_ocr_pipeline.py`.
+7. Бэкап по планировщику: `.\scripts\backup.ps1 -Keep 30`; восстановление — см. `docs/reliability.md`.
+8. Скрины/сканы: положить PDF в `data/prescriptions/inbox/customer/` → пайплайн → проверка в вебе.
+
 ## Безопасные значения по умолчанию (Приложение A)
 
 До получения ответов на уточняющие вопросы: OCR регистрируется только после
