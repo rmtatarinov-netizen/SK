@@ -25,6 +25,10 @@ python scripts\create_first_admin.py   # первый администратор
 python -m pytest                 # тесты конфигурации и схемы
 ```
 
+> PaddleOCR (шахматные сканы) ставится отдельно: `pip install -r requirements-ocr.txt`
+> (~600 МБ, paddlepaddle CPU). Текстовые PDF обрабатываются через PyMuPDF без него;
+> без установленного движка файлы-сканы остаются в inbox с понятной ошибкой.
+
 Linux/macOS: `./scripts/setup_local.sh`, `./scripts/pull_models.sh`.
 
 Дополнительные группы зависимостей ставятся на своих шагах:

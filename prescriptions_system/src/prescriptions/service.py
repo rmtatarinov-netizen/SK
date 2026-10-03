@@ -34,7 +34,11 @@ def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _require_creator(db: Session, actor_user_id: int | None) -> User:
+def _require_creator(
+    db: Session, actor_user_id: int | None, *, allow_system: bool = False
+) -> User | None:
+    if allow_system and actor_user_id is None:
+        return None  # системное создание (OCR-пайплайн) — подтвердит инспектор
     actor = db.get(User, actor_user_id) if actor_user_id is not None else None
     if actor is None or not actor.is_active:
         raise PermissionError("Пользователь не найден или неактивен")
@@ -66,15 +70,23 @@ def _add_history(
 
 
 def create_prescription(
-    db: Session, data: PrescriptionCreate, *, actor_user_id: int | None
+    db: Session,
+    data: PrescriptionCreate,
+    *,
+    actor_user_id: int | None,
+    as_system: bool = False,
 ) -> Prescription:
     """Создать предписание. Внутреннее — со статусом draft_for_signature,
     предписание Заказчика (из пайплайна OCR) — new + requires_review.
 
+    as_system=True — создание OCR-пайплайном без пользователя-инициатора:
+    запись требует обязательной проверки инспектором (§1.6), уведомления
+    подрядчику не отправляются до подтверждения.
+
     Дубли недопустимы: проверка уникального ключа
     (doc_number, doc_date, object_id, prescription_type).
     """
-    actor = _require_creator(db, actor_user_id)
+    actor = _require_creator(db, actor_user_id, allow_system=as_system)
 
     duplicate = find_prescription_duplicate(
         db,
@@ -104,7 +116,7 @@ def create_prescription(
         deadline=data.deadline,
         responsible_user_id=data.responsible_user_id,
         inspector_user_id=inspector_id
-        or (actor.id if actor.role == UserRole.INSPECTOR else None),
+        or (actor.id if actor is not None and actor.role == UserRole.INSPECTOR else None),
         status=(
             PrescriptionStatus.DRAFT_FOR_SIGNATURE
             if data.prescription_type == PrescriptionType.INTERNAL
@@ -112,7 +124,7 @@ def create_prescription(
         ),
         # Правило §1.6: OCR/LLM-данные требуют проверки; ручное создание — нет.
         requires_review=data.prescription_type == PrescriptionType.CUSTOMER,
-        created_by_user_id=actor.id,
+        created_by_user_id=actor.id if actor is not None else None,
     )
     for index, item in enumerate(data.items, start=1):
         prescription.items.append(
@@ -129,7 +141,7 @@ def create_prescription(
     _add_history(
         db,
         prescription_id=prescription.id,
-        actor_id=actor.id,
+        actor_id=actor.id if actor is not None else None,
         change_type="created",
         new_value={
             "doc_number": prescription.doc_number,

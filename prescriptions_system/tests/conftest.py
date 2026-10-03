@@ -120,13 +120,19 @@ def prescription(db: Session, obj: m.Object, contractor: m.Contractor) -> m.Pres
 
 @pytest.fixture()
 def tmp_storage(tmp_path, monkeypatch):
-    """Перенос файловых каталогов print/scan сервисов в tmp_path."""
+    """Перенос файловых каталогов print/scan/ocr сервисов в tmp_path."""
     from types import SimpleNamespace
 
+    from src.ocr import pipeline as ocr_pipeline
     from src.prescriptions import print_service, signed_scan_service
 
     class FakeSettings:
-        storage = SimpleNamespace(storage="storage", uploads="uploads")
+        storage = SimpleNamespace(
+            storage="storage",
+            uploads="uploads",
+            processed="processed",
+            inbox="inbox",
+        )
 
         def resolve_path(self, relative):
             p = Path(relative)
@@ -135,6 +141,7 @@ def tmp_storage(tmp_path, monkeypatch):
     fake = FakeSettings()
     monkeypatch.setattr(print_service, "get_settings", lambda: fake)
     monkeypatch.setattr(signed_scan_service, "get_settings", lambda: fake)
+    monkeypatch.setattr(ocr_pipeline, "get_settings", lambda: fake)
     return tmp_path
 
 
