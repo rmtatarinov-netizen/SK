@@ -37,6 +37,11 @@ def main() -> int:
     parser.add_argument("--contractor-id", type=int, default=None)
     parser.add_argument("--object", dest="object_name", default=None, help="именование объекта из справочника")
     parser.add_argument("--contractor", dest="contractor_name", default=None)
+    parser.add_argument(
+        "--use-llm",
+        action="store_true",
+        help="после OCR вызвать LLM-извлечение (Ollama, Шаг 6)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -61,11 +66,18 @@ def main() -> int:
                 return 2
             contractor_id = found.id
 
+        llm_client = None
+        if args.use_llm:
+            from src.llm.client import OllamaClient
+
+            llm_client = OllamaClient()
+
         summary = run_pipeline(
             db,
             inbox_dir=args.inbox,
             object_id=object_id,
             contractor_id=contractor_id,
+            llm_client=llm_client,
         )
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         bad = summary["counters"].get("error", 0) + summary["counters"].get("incomplete", 0)

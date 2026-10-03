@@ -34,8 +34,11 @@ from sqlalchemy.orm import Session
 from src.config import get_settings
 from src.db.models import (
     Contractor,
+    NormRefSource,
+    NormRefStatus,
     Object,
     Prescription,
+    PrescriptionNormRef,
     PrescriptionType,
     ProcessedFileStatus,
 )
@@ -43,7 +46,9 @@ from src.db.repositories import (
     find_prescription_duplicate,
     get_contractor_by_name,
     get_object_by_name,
+    prescription_has_norm_ref,
 )
+from src.llm.extract_fields import extract_fields as llm_extract_fields
 from src.ocr import parsers
 from src.ocr.file_registry import is_already_processed, mark_processed, sha256_of
 from src.prescriptions.schemas import PrescriptionCreate
@@ -188,8 +193,13 @@ def process_file(
     *,
     object_id: int | None = None,
     contractor_id: int | None = None,
+    llm_client=None,
 ) -> FileResult:
-    """Обработать один файл. Идемпотентно по SHA-256."""
+    """Обработать один файл. Идемпотентно по SHA-256.
+
+    llm_client (Шаг 6) опционален: regex-поля Шага 5 остаются черновиком,
+    LLM дозаполняет отсутствующее, ссылки сохраняются как suggested.
+    """
     path = Path(path)
     name = path.name
     try:
@@ -205,6 +215,22 @@ def process_file(
         stored = _store_original(db, path, sha)
         extraction = extract_document(path)
         fields = parsers.parse_fields(extraction.text)
+
+        extracted = None
+        if llm_client is not None:
+            extracted = llm_extract_fields(
+                llm_client, extraction.text, db=db
+            )
+            if extracted is not None:
+                fields.doc_number = fields.doc_number or extracted.doc_number
+                fields.doc_date = fields.doc_date or extracted.doc_date
+                fields.deadline = fields.deadline or extracted.deadline
+                fields.object_name = fields.object_name or extracted.object_name
+                fields.contractor_name = (
+                    fields.contractor_name or extracted.contractor_name
+                )
+                if extracted.items:
+                    fields.items = [item.text for item in extracted.items]
 
         resolved_object_id = object_id or _resolve_directory(
             db, fields.object_name, Object
@@ -250,6 +276,27 @@ def process_file(
                 prescription_id=duplicate.id,
             )
 
+        if extracted is not None and extracted.items:
+            items_payload = [
+                {
+                    "text": item.text,
+                    "deadline": item.deadline,
+                    "explicit_norm_refs": item.explicit_norm_refs,
+                }
+                for item in extracted.items
+            ]
+        else:
+            items_payload = [
+                {
+                    "text": item,
+                    "deadline": fields.deadline,
+                    "explicit_norm_refs": fields.norm_refs,
+                }
+                for item in (
+                    fields.items or [fields.description or extraction.text[:500]]
+                )
+            ]
+
         data = PrescriptionCreate(
             prescription_type=PrescriptionType.CUSTOMER,
             doc_number=fields.doc_number,
@@ -258,20 +305,38 @@ def process_file(
             contractor_id=resolved_contractor_id,
             description=fields.description or extraction.text[:1500],
             deadline=fields.deadline,
-            items=[
-                {
-                    "text": item,
-                    "deadline": fields.deadline,
-                    "explicit_norm_refs": fields.norm_refs,
-                }
-                for item in (fields.items or [fields.description or extraction.text[:500]])
-            ],
+            items=items_payload,
         )
         prescription = create_prescription(db, data, actor_user_id=None, as_system=True)
         prescription.ocr_text = extraction.text
         prescription.ocr_confidence = extraction.confidence
         prescription.source_file_path = str(stored)
         prescription.source_file_hash = sha
+
+        # явные нормативные ссылки: proposed (требуют проверки инспектором)
+        if extracted is not None:
+            seen_codes: set[str] = set()
+            for item in extracted.items:
+                for code in item.explicit_norm_refs:
+                    code = code.strip()
+                    if not code or code in seen_codes:
+                        continue
+                    seen_codes.add(code)
+                    if not prescription_has_norm_ref(
+                        db,
+                        prescription_id=prescription.id,
+                        item_id=None,
+                        doc_code=code,
+                        doc_item=None,
+                    ):
+                        db.add(
+                            PrescriptionNormRef(
+                                prescription_id=prescription.id,
+                                doc_code=code,
+                                source=NormRefSource.LLM,
+                                status=NormRefStatus.SUGGESTED,
+                            )
+                        )
         db.commit()
         db.refresh(prescription)
 
@@ -283,6 +348,7 @@ def process_file(
                 "prescription_id": prescription.id,
                 "engine": extraction.engine,
                 "sha256": sha[:12],
+                "llm": extracted is not None,
             },
         )
         return FileResult(
@@ -304,6 +370,7 @@ def run_pipeline(
     inbox_dir: Path | str | None = None,
     object_id: int | None = None,
     contractor_id: int | None = None,
+    llm_client=None,
 ) -> dict:
     """Пакетная обработка inbox-каталога. Повторный запуск безопасен."""
     settings = get_settings()
@@ -316,7 +383,11 @@ def run_pipeline(
             if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES:
                 results.append(
                     process_file(
-                        db, path, object_id=object_id, contractor_id=contractor_id
+                        db,
+                        path,
+                        object_id=object_id,
+                        contractor_id=contractor_id,
+                        llm_client=llm_client,
                     )
                 )
     counters: dict[str, int] = {}

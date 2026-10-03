@@ -163,3 +163,57 @@ def test_run_pipeline_batch(db, obj, contractor, tmp_storage, tmp_path):
     # повторный прогон: оба пропускаются
     summary2 = pipeline.run_pipeline(db, inbox_dir=inbox, object_id=obj.id, contractor_id=contractor.id)
     assert summary2["counters"]["skipped"] == 2
+
+
+def test_pipeline_with_llm_saves_suggested_refs(db, obj, contractor, tmp_storage, tmp_path):
+    from src.db.models import NormRefSource, NormRefStatus
+    from tests.fakes.llm import FakeLLMClient
+
+    pdf = make_pdf(tmp_path / "drop" / "scan_llm.pdf", SAMPLE_LINES)
+    client = FakeLLMClient(
+        [
+            {
+                "doc_number": None,
+                "doc_date": None,
+                "object_name": None,
+                "contractor_name": None,
+                "description": None,
+                "violation": None,
+                "deadline": "2026-12-01",
+                "responsible_person": None,
+                "items": [
+                    {
+                        "text": "Устранить нарушение",
+                        "deadline": "2026-12-01",
+                        "explicit_norm_refs": ["СП 63.13330.2018 п.5.3"],
+                    }
+                ],
+                "confidence": 0.6,
+            }
+        ]
+    )
+    res = pipeline.process_file(
+        db, pdf, object_id=obj.id, contractor_id=contractor.id, llm_client=client
+    )
+    assert res.status == "created", res.error
+    p = db.get(Prescription, res.prescription_id)
+    # regex deadline имеет приоритет (значение из документа), LLM дозаполняет пустое
+    assert p.deadline == date(2026, 9, 30)
+    assert len(p.items) == 1  # пункты взяты из LLM
+    refs = [r for r in p.norm_refs if r.source == NormRefSource.LLM]
+    assert len(refs) == 1
+    assert refs[0].status == NormRefStatus.SUGGESTED
+    assert refs[0].doc_code == "СП 63.13330.2018 п.5.3"
+
+
+def test_pipeline_llm_failure_does_not_break_creation(db, obj, contractor, tmp_storage, tmp_path):
+    from tests.fakes.llm import FakeLLMClient
+
+    pdf = make_pdf(tmp_path / "drop" / "scan_llm2.pdf", SAMPLE_LINES)
+    client = FakeLLMClient(outcome="fail")
+    res = pipeline.process_file(
+        db, pdf, object_id=obj.id, contractor_id=contractor.id, llm_client=client
+    )
+    assert res.status == "created", res.error
+    p = db.get(Prescription, res.prescription_id)
+    assert p.doc_number == "П-14/2026"  # regex-черновик сохранился
