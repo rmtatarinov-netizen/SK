@@ -111,6 +111,7 @@ def prescription(db: Session, obj: m.Object, contractor: m.Contractor) -> m.Pres
         description="Не обеспечена защита арматуры от коррозии.",
         deadline=date(2026, 9, 30),
         status=m.PrescriptionStatus.NEW,
+        requires_review=True,
     )
     db.add(p)
     db.commit()

@@ -8,13 +8,19 @@
 
 from __future__ import annotations
 
+import hashlib
+import shutil
 from datetime import datetime, timezone
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.config import get_settings
 from src.db.models import (
+    AttachmentKind,
     Prescription,
+    PrescriptionAttachment,
     PrescriptionHistory,
     PrescriptionItem,
     PrescriptionStatus,
@@ -325,3 +331,126 @@ def change_responsible(
     db.commit()
     db.refresh(prescription)
     return prescription
+
+
+ATTACHMENT_ALLOWED_FOR_CONTRACTOR = {
+    PrescriptionStatus.IN_WORK,
+    PrescriptionStatus.FIXED_PENDING_REVIEW,
+}
+
+
+def add_attachment(
+    db: Session,
+    prescription: Prescription,
+    *,
+    source_path,
+    actor_user_id: int | None,
+    kind: AttachmentKind = AttachmentKind.PHOTO,
+    caption: str | None = None,
+) -> PrescriptionAttachment:
+    """Добавить вложение (фото устранения, акт).
+
+    Подрядчик: только своё предписание и только на этапах устранения;
+    инспектор/администратор — всегда. Дедупликация по SHA-256 внутри
+    предписания; исходный файл копируется в uploads и не удаляется.
+    """
+    actor = db.get(User, actor_user_id) if actor_user_id is not None else None
+    if actor is None or not actor.is_active:
+        raise PermissionError("Пользователь не найден или неактивен")
+
+    if actor.role == UserRole.CONTRACTOR_RESPONSIBLE:
+        if (
+            actor.contractor_id is None
+            or actor.contractor_id != prescription.contractor_id
+        ):
+            raise PermissionError(
+                "Подрядчик может добавлять вложения только к своим предписаниям"
+            )
+        if prescription.status not in ATTACHMENT_ALLOWED_FOR_CONTRACTOR:
+            raise PermissionError(
+                "Вложения принимаются на этапах «В работе» и «Заявлено об устранении»"
+            )
+    elif actor.role not in (UserRole.INSPECTOR, UserRole.ADMIN):
+        raise PermissionError("Роль не может добавлять вложения")
+
+    source = Path(source_path)
+    if not source.exists():
+        raise ValueError(f"Файл не найден: {source}")
+    file_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+
+    existing = db.scalar(
+        select(PrescriptionAttachment).where(
+            PrescriptionAttachment.prescription_id == prescription.id,
+            PrescriptionAttachment.file_hash == file_hash,
+        )
+    )
+    if existing is not None:
+        return existing
+
+    settings = get_settings()
+    target_dir = (
+        settings.resolve_path(settings.storage.uploads)
+        / f"prescription_{prescription.id}"
+    )
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{file_hash[:16]}{source.suffix.lower()}"
+    if not target.exists():
+        shutil.copy2(source, target)
+
+    attachment = PrescriptionAttachment(
+        prescription_id=prescription.id,
+        kind=kind,
+        file_path=str(target),
+        file_hash=file_hash,
+        size_bytes=target.stat().st_size,
+        caption=caption,
+        uploaded_by_user_id=actor.id,
+    )
+    db.add(attachment)
+    _add_history(
+        db,
+        prescription_id=prescription.id,
+        actor_id=actor.id,
+        change_type="attachment_added",
+        new_value={"sha256": file_hash[:16], "kind": kind.value},
+    )
+    create_notification_outbox_records(
+        db=db, prescription=prescription, event=NotificationEvent.ATTACHMENT_ADDED
+    )
+    db.commit()
+    db.refresh(attachment)
+    return attachment
+
+
+def add_comment(
+    db: Session,
+    prescription: Prescription,
+    *,
+    actor_user_id: int | None,
+    text: str,
+) -> PrescriptionHistory:
+    """Комментарий в историю (без смены статуса)."""
+    actor = db.get(User, actor_user_id) if actor_user_id is not None else None
+    if actor is None or not actor.is_active:
+        raise PermissionError("Пользователь не найден или неактивен")
+    if actor.role == UserRole.CONTRACTOR_RESPONSIBLE:
+        if (
+            actor.contractor_id is None
+            or actor.contractor_id != prescription.contractor_id
+        ):
+            raise PermissionError("Комментировать могут только свои предписания")
+    elif actor.role not in (UserRole.INSPECTOR, UserRole.ADMIN):
+        raise PermissionError("Роль не может комментировать")
+    if not text or not text.strip():
+        raise ValueError("Пустой комментарий")
+
+    entry = PrescriptionHistory(
+        prescription_id=prescription.id,
+        changed_by_user_id=actor.id,
+        change_type="comment_added",
+        comment=text.strip(),
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry

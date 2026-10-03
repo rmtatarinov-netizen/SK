@@ -40,6 +40,14 @@ Linux/macOS: `./scripts/setup_local.sh`, `./scripts/pull_models.sh`.
 | `requirements-rag.txt` | 7 | ChromaDB |
 | `requirements-reports.txt` | 11 | WeasyPrint, openpyxl |
 
+Фоновые процессы:
+
+```powershell
+python scripts\run_notification_worker.py --interval 5   # доставка уведомлений
+python scripts\run_bot.py                                 # Telegram-бот (long polling)
+python scripts\run_ocr_pipeline.py                        # пакетное распознавание inbox
+```
+
 ## Конфигурация
 
 - `config.yaml` — параметры (пути к данным, Ollama, RAG, retry-политика уведомлений). Пути относительные, разрешаются от корня проекта.
