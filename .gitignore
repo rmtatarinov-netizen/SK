@@ -33,3 +33,4 @@ Desktop.ini
 # Сброс пароля администратора (для тестирования)
 prescriptions_system/scripts/reset_admin_password.py
 prescriptions_system/scripts/reset_admin_password.py
+prescriptions_system/scripts/reset_admin_password.py
