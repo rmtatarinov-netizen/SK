@@ -77,6 +77,13 @@ def list_prescriptions(
     status: PrescriptionStatus | None = None,
     contractor_id: int | None = None,
     object_id: int | None = None,
+    enterprise_id: int | None = None,
+    category_id: int | None = None,
+    kind_id: int | None = None,
+    date_issued_from: date | None = None,
+    date_issued_to: date | None = None,
+    date_fixed_from: date | None = None,
+    date_fixed_to: date | None = None,
 ) -> list[Prescription]:
     stmt = select(Prescription)
     if status is not None:
@@ -85,6 +92,20 @@ def list_prescriptions(
         stmt = stmt.where(Prescription.contractor_id == contractor_id)
     if object_id is not None:
         stmt = stmt.where(Prescription.object_id == object_id)
+    if enterprise_id is not None:
+        stmt = stmt.where(Prescription.enterprise_id == enterprise_id)
+    if category_id is not None:
+        stmt = stmt.where(Prescription.category_id == category_id)
+    if kind_id is not None:
+        stmt = stmt.where(Prescription.kind_id == kind_id)
+    if date_issued_from:
+        stmt = stmt.where(Prescription.doc_date >= date_issued_from)
+    if date_issued_to:
+        stmt = stmt.where(Prescription.doc_date <= date_issued_to)
+    if date_fixed_from:
+        stmt = stmt.where(Prescription.actual_fix_date >= date_fixed_from)
+    if date_fixed_to:
+        stmt = stmt.where(Prescription.actual_fix_date <= date_fixed_to)
     return list(db.scalars(stmt.order_by(Prescription.created_at.desc())))
 
 

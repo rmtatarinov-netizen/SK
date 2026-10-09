@@ -22,10 +22,14 @@
   <tr><th>Всего предписаний</th><td>{{ data.total }}</td></tr>
   <tr><th>Заказчика</th><td>{{ data.types.get('customer', 0) }}</td></tr>
   <tr><th>Внутренних</th><td>{{ data.types.get('internal', 0) }}</td></tr>
+  <tr><th>Всего устранено</th><td>{{ data.fixed }}</td></tr>
+  <tr><th>Не устранено</th><td>{{ data.not_fixed }}</td></tr>
   <tr><th>Просрочено (открытые со сроком в прошлом)</th><td>{{ data.overdue }}</td></tr>
+  <tr><th>Истек срок (любой статус)</th><td>{{ data.deadline_expired }}</td></tr>
   <tr><th>Средний срок устранения, дней</th><td>{{ data.average_fix_days if data.average_fix_days is not none else '—' }}</td></tr>
-  <tr><th>Среднее время до проверки, дней</th><td>{{ data.average_review_days if data.average_review_days is not none else '—' }}</td></tr>
+  <tr><th>Среднее время проверки, дней</th><td>{{ data.average_review_days if data.average_review_days is not none else '—' }}</td></tr>
   <tr><th>Возвратов на доработку</th><td>{{ data.rework_returns }}</td></tr>
+  <tr><th>Процент выполнения</th><td>{{ data.completion_pct }}%</td></tr>
   <tr><th>Уведомлений всего / отправлено % / ошибок %</th>
       <td>{{ data.notifications.total }} / {{ data.notifications.sent_pct }}% / {{ data.notifications.failed_pct }}%</td></tr>
 </table>

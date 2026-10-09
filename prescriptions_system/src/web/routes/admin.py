@@ -12,7 +12,10 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.db.models import Contractor, Object, RecipientChannel, User, UserRole
+from src.db.models import (
+    Contractor, Object, RecipientChannel, User, UserRole,
+    PrescriptionCategory, PrescriptionKind, ConstructionManagement, PrescriptionInspector, Enterprise
+)
 from src.notifications.enums import NotificationChannel
 from src.users import service as users_service
 from src.users.schemas import UserCreate
@@ -70,6 +73,13 @@ def create_user_route(
             telegram_chat_id=(telegram_chat_id or "").strip() or None,
         )
         created, temp_password = users_service.create_user(db, data, actor_user_id=user.id)
+        
+        # Automatically create entry in PrescriptionInspector if the user is an inspector
+        if created.role == UserRole.INSPECTOR:
+            if not db.scalar(select(PrescriptionInspector).where(PrescriptionInspector.name == created.full_name)):
+                db.add(PrescriptionInspector(name=created.full_name))
+                db.commit()
+
         flash(
             request,
             f"Пользователь {created.login} создан. Временный пароль (показать лично): {temp_password}",
@@ -147,6 +157,11 @@ def directories_page(
         user=user,
         objects=db.scalars(select(Object).order_by(Object.name)).all(),
         contractors=db.scalars(select(Contractor).order_by(Contractor.name)).all(),
+        enterprises=db.scalars(select(Enterprise).order_by(Enterprise.name)).all(),
+        categories=db.scalars(select(PrescriptionCategory).order_by(PrescriptionCategory.name)).all(),
+        kinds=db.scalars(select(PrescriptionKind).order_by(PrescriptionKind.name)).all(),
+        mgmt=db.scalars(select(ConstructionManagement).order_by(ConstructionManagement.name)).all(),
+        issuers=db.scalars(select(PrescriptionInspector).order_by(PrescriptionInspector.name)).all(),
     )
 
 
@@ -183,4 +198,94 @@ def add_contractor_route(
         db.add(Contractor(name=name, inn=(inn or None)))
         db.commit()
         flash(request, "Подрядчик добавлен.")
+    return RedirectResponse("/admin/directories", status_code=303)
+
+
+@router.post("/directories/enterprises")
+def add_enterprise_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+    name: str = Form(...),
+    address: str | None = Form(None),
+):
+    name = name.strip()
+    if db.scalar(select(Enterprise).where(Enterprise.name == name)):
+        flash(request, "Предприятие с таким названием уже есть.")
+    else:
+        try:
+            db.add(Enterprise(name=name, address=(address or None)))
+            db.commit()
+            flash(request, "Предприятие добавлено.")
+        except Exception as e:
+            db.rollback()
+            flash(request, f"Ошибка при сохранении: {e}")
+    return RedirectResponse("/admin/directories", status_code=303)
+
+
+@router.post("/directories/categories")
+def add_category_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+    name: str = Form(...),
+):
+    name = name.strip()
+    if db.scalar(select(PrescriptionCategory).where(PrescriptionCategory.name == name)):
+        flash(request, "Категория с таким названием уже есть.")
+    else:
+        db.add(PrescriptionCategory(name=name))
+        db.commit()
+        flash(request, "Категория добавлена.")
+    return RedirectResponse("/admin/directories", status_code=303)
+
+
+@router.post("/directories/kinds")
+def add_kind_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+    name: str = Form(...),
+):
+    name = name.strip()
+    if db.scalar(select(PrescriptionKind).where(PrescriptionKind.name == name)):
+        flash(request, "Вид предписания с таким названием уже есть.")
+    else:
+        db.add(PrescriptionKind(name=name))
+        db.commit()
+        flash(request, "Вид предписания добавлен.")
+    return RedirectResponse("/admin/directories", status_code=303)
+
+
+@router.post("/directories/mgmt")
+def add_mgmt_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+    name: str = Form(...),
+):
+    name = name.strip()
+    if db.scalar(select(ConstructionManagement).where(ConstructionManagement.name == name)):
+        flash(request, "Запись управления строительством уже есть.")
+    else:
+        db.add(ConstructionManagement(name=name))
+        db.commit()
+        flash(request, "Запись добавлена.")
+    return RedirectResponse("/admin/directories", status_code=303)
+
+
+@router.post("/directories/issuers")
+def add_inspector_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+    name: str = Form(...),
+):
+    name = name.strip()
+    if db.scalar(select(PrescriptionInspector).where(PrescriptionInspector.name == name)):
+        flash(request, "Инспектор с таким названием уже есть.")
+    else:
+        db.add(PrescriptionInspector(name=name))
+        db.commit()
+        flash(request, "Инспектор добавлен.")
     return RedirectResponse("/admin/directories", status_code=303)

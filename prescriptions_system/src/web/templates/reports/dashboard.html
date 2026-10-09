@@ -1,29 +1,95 @@
 {% extends "base.html" %}
 {% block title %}Отчёты{% endblock %}
 {% block content %}
-<h1>Дашборд предписаний</h1>
+<style>
+  .filters-container {
+    margin-top: 20px;
+  }
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 0;
+  }
+  .spacer {
+    height: 15px;
+  }
+  .date-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .header-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  .selects-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+</style>
+
+<form method="get" action="/reports">
+  <div class="header-row">
+    <h1>Дашборд предписаний</h1>
+    <div class="selects-wrapper">
+      <select name="enterprise_id" onchange="this.form.submit()">
+        <option value="">Все предприятия</option>
+        {% for e in enterprises %}
+        <option value="{{ e.id }}" {% if filters.enterprise_id == e.id %}selected{% endif %}>{{ e.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="prescription_type" onchange="this.form.submit()">
+        <option value="">Все типы</option>
+        {% for t in prescription_types %}
+        <option value="{{ t }}" {% if filters.prescription_type == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="filters-container">
+    <div class="filter-row">
+      <label>Период строительства
+        <select name="period_type" onchange="this.form.submit()">
+          <option value="week" {% if filters.period_type == 'week' %}selected{% endif %}>Неделя</option>
+          <option value="month" {% if filters.period_type == 'month' %}selected{% endif %}>Месяц</option>
+          <option value="year" {% if filters.period_type == 'year' %}selected{% endif %}>Год</option>
+          <option value="custom" {% if filters.period_type == 'custom' %}selected{% endif %}>Произвольный</option>
+        </select>
+      </label>
+      <div class="date-input-wrapper">
+        <label>С: </label>
+        <input type="date" name="date_from" value="{{ filters.date_from or '' }}" onchange="this.form.submit()">
+      </div>
+      <div class="date-input-wrapper">
+        <label>По: </label>
+        <input type="date" name="date_to" value="{{ filters.date_to or '' }}" onchange="this.form.submit()">
+      </div>
+      <button type="submit">Фильтр</button>
+    </div>
+  </div>
+</form>
+
+<div class="spacer"></div>
 <p class="muted">Данные сформированы {{ data.generated_at }} · только из БД</p>
 
+<div class="panel">
+  <p>Всего предписаний: <b>{{ data.total }}</b></p>
+  <p>Всего устранено: <b>{{ data.fixed }}</b></p>
+  <p>Истёк срок устранения: <b>{{ data.deadline_expired }}</b></p>
+  <p>Не устранено: <b>{{ data.not_fixed }}</b></p>
+  <p>Просрочено: <b>{{ data.overdue }}</b></p>
+  <p>Средний срок устранения, дн.: <b>{{ data.average_fix_days if data.average_fix_days is not none else '—' }}</b></p>
+  <p>Среднее время проверки, дн.: <b>{{ data.average_review_days if data.average_review_days is not none else '—' }}</b></p>
+  <p>Возвратов на доработку: <b>{{ data.rework_returns }}</b></p>
+  <p>Процент выполнения: <b>{{ data.completion_pct }}%</b></p>
+</div>
+
 <div class="grid">
-  <div class="panel">
-    <h2>Ключевые метрики</h2>
-    <table>
-      <tr><th>Всего предписаний</th><td>{{ data.total }}</td></tr>
-      <tr><th>Заказчика / внутренних</th><td>{{ data.types.get('customer', 0) }} / {{ data.types.get('internal', 0) }}</td></tr>
-      <tr><th>Просрочено</th><td>{{ data.overdue }}</td></tr>
-      <tr><th>Средний срок устранения, дн.</th><td>{{ data.average_fix_days if data.average_fix_days is not none else '—' }}</td></tr>
-      <tr><th>Среднее время до проверки, дн.</th><td>{{ data.average_review_days if data.average_review_days is not none else '—' }}</td></tr>
-      <tr><th>Возвратов на доработку</th><td>{{ data.rework_returns }}</td></tr>
-      <tr><th>Уведомления: отправлено</th><td>{{ data.notifications.sent_pct if data.notifications.sent_pct is not none else '—' }}%</td></tr>
-      <tr><th>Уведомления: ошибки доставки</th><td>{{ data.notifications.failed_pct if data.notifications.failed_pct is not none else '—' }}%</td></tr>
-    </table>
-    <p>
-      <a href="/reports/print"><button type="button" class="secondary">Версия для печати</button></a>
-      <a href="/reports/pdf"><button type="button" class="secondary">PDF</button></a>
-      <a href="/reports/export.csv"><button type="button" class="secondary">CSV</button></a>
-      <a href="/reports/export.xlsx"><button type="button" class="secondary">XLSX</button></a>
-    </p>
-  </div>
   <div class="panel">
     <h2>Статусы</h2>
     <canvas id="statusChart" width="300" height="300"></canvas>
@@ -38,7 +104,7 @@
   </div>
 </div>
 
-<div class="panel">
+<div class="panel" style="margin-top: 20px;">
   <h2>Частота нормативных пунктов (подтверждённых)</h2>
   <table>
     <thead><tr><th>Документ</th><th>Пункт</th><th>Частота</th></tr></thead>
@@ -48,6 +114,13 @@
     {% else %}<tr><td colspan="3" class="muted">Подтверждённых ссылок пока нет.</td></tr>{% endfor %}
     </tbody>
   </table>
+</div>
+
+<div class="panel" style="margin-top: 20px; text-align: right;">
+  <a href="/reports/print"><button type="button" class="secondary">Версия для печати</button></a>
+  <a href="/reports/pdf"><button type="button" class="secondary">PDF</button></a>
+  <a href="/reports/export.csv"><button type="button" class="secondary">CSV</button></a>
+  <a href="/reports/export.xlsx"><button type="button" class="secondary">XLSX</button></a>
 </div>
 
 <script src="/static/vendor/chart.umd.js"></script>

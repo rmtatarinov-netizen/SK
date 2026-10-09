@@ -1,12 +1,19 @@
-"""Фикстуры pytest: SQLite в памяти + фабрики объектов/подрядчиков/пользователей."""
+"""Фикстуры pytest: SQLite в памяти + фабрики объектов/подрядчиков/пользователей.
+
+Общие веб-фикстуры (client, persons, login) перенесены из tests/test_web.py,
+чтобы их можно было переиспользовать в других модулях (extended fields,
+справочники, дашборд).
+"""
 
 from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Iterator
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -14,6 +21,10 @@ from sqlalchemy.pool import StaticPool
 
 from src.db import models as m
 from src.db.base import Base
+from src.users import service as users_service
+from src.web.app import create_app
+
+PASSWORD = "Secret123!"
 
 
 @pytest.fixture()
@@ -122,8 +133,6 @@ def prescription(db: Session, obj: m.Object, contractor: m.Contractor) -> m.Pres
 @pytest.fixture()
 def tmp_storage(tmp_path, monkeypatch):
     """Перенос файловых каталогов print/scan/ocr сервисов в tmp_path."""
-    from types import SimpleNamespace
-
     from src.ocr import pipeline as ocr_pipeline
     from src.prescriptions import print_service, service as prescriptions_service
     from src.prescriptions import signed_scan_service
@@ -164,3 +173,45 @@ def internal_prescription(db, obj, contractor, admin) -> m.Prescription:
         items=[{"text": "Установить ограждение", "deadline": None}],
     )
     return create_prescription(db, data, actor_user_id=admin.id)
+
+
+# --- общие веб-фикстуры (ex test_web.py) --------------------------------------
+
+
+def _mk_user(db, login_name, role, contractor_id=None, object_id=None):
+    user = m.User(
+        login=login_name,
+        full_name=f"Тест {login_name}",
+        role=role,
+        password_hash=users_service.hash_password(PASSWORD),
+        contractor_id=contractor_id,
+        object_id=object_id,
+        must_change_password=False,
+    )
+    db.add(user)
+    db.commit()
+    return user
+
+
+@pytest.fixture()
+def client(db, engine):
+    app = create_app()
+    app.state.session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    return TestClient(app, follow_redirects=False)
+
+
+@pytest.fixture()
+def persons(db, obj, contractor):
+    insp = _mk_user(db, "web_insp", m.UserRole.INSPECTOR, object_id=obj.id)
+    podr = _mk_user(db, "web_podr", m.UserRole.CONTRACTOR_RESPONSIBLE, contractor_id=contractor.id)
+    adm = _mk_user(db, "web_adm", m.UserRole.ADMIN)
+    other = _mk_user(db, "web_other", m.UserRole.CONTRACTOR_RESPONSIBLE, contractor_id=9999)
+    return SimpleNamespace(insp=insp, podr=podr, adm=adm, other=other)
+
+
+def login(client, name: str):
+    return client.post(
+        "/login",
+        data={"login": name, "password": PASSWORD},
+        follow_redirects=False,
+    )

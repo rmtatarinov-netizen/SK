@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.orm import Session
 
+from src.db.models import PrescriptionStatus
 from src.reports import queries
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "src" / "web" / "templates"
@@ -30,22 +31,84 @@ class PdfRenderUnavailable(RuntimeError):
     pass
 
 
-def build_dashboard_data(db: Session) -> dict:
+def get_period_dates(period_type: str | None, custom_start: date | None = None, custom_end: date | None = None) -> tuple[date | None, date | None]:
+    """Вычисляет границы периода строительства (скользящее окно)."""
+    if not period_type or period_type == "custom":
+        return custom_start, custom_end
+
+    # Окончание окна — вторник текущей недели (день приёмки/среза)
+    today = date.today()
+    current_tuesday = today - timedelta(days=(today.weekday() - 1) % 7)
+
+    if period_type == "week":
+        delta = timedelta(days=7)
+    elif period_type == "month":
+        delta = timedelta(days=30)
+    elif period_type == "year":
+        delta = timedelta(days=365)
+    else:
+        return None, None
+
+    return current_tuesday - delta, current_tuesday
+
+
+def build_dashboard_data(db: Session, filters: dict = None) -> dict:
     """Единый JSON дашборда (структура из ТЗ §28) + метрики."""
-    statuses = queries.status_breakdown(db)
+    filters = filters or {}
+    
+    # Расчет дат периода
+    date_from, date_to = get_period_dates(
+        filters.get("period_type"),
+        filters.get("date_from"),
+        filters.get("date_to")
+    )
+    
+    # Формируем итоговый фильтр для запросов
+    query_filters = {
+        "enterprise_id": filters.get("enterprise_id"),
+        "prescription_type": filters.get("prescription_type"),
+        "date_from": date_from,
+        "date_to": date_to,
+    }
+    
+    # Сбор основных данных
+    total = queries.total_prescriptions(db, filters=query_filters)
+    fixed = len(
+        [
+            p
+            for p in queries.get_filtered_prescriptions(db, **query_filters)
+            if p.status == PrescriptionStatus.CLOSED
+        ]
+    )
+
+    overdue = queries.overdue_count(db, filters=query_filters)
+    expired = queries.deadline_expired_count(db, filters=query_filters)
+    not_fixed = total - fixed
+
+    avg_fix = queries.average_fix_days(db, filters=query_filters)
+    avg_review = queries.average_review_days(db, filters=query_filters)
+    rework = queries.rework_count(db, filters=query_filters)
+    completion_pct = round((fixed / total * 100), 1) if total else 0
+
+    statuses = queries.status_breakdown(db, filters=query_filters)
+
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "total": queries.total_prescriptions(db),
-        "types": queries.type_breakdown(db),
+        "total": total,
+        "fixed": fixed,
+        "not_fixed": not_fixed,
+        "overdue": overdue,
+        "deadline_expired": expired,
+        "average_fix_days": avg_fix,
+        "average_review_days": avg_review,
+        "rework_returns": rework,
+        "completion_pct": completion_pct,
+        "types": queries.type_breakdown(db, filters=query_filters),
         "statuses": statuses,
-        "overdue": queries.overdue_count(db),
-        "average_fix_days": queries.average_fix_days(db),
-        "average_review_days": queries.average_review_days(db),
-        "rework_returns": queries.rework_count(db),
-        "by_contractor": queries.by_contractor(db),
-        "by_object": queries.by_object(db),
+        "by_contractor": queries.by_contractor(db, filters=query_filters),
+        "by_object": queries.by_object(db, filters=query_filters),
         "norm_frequency": queries.norm_frequency(db),
-        "notifications": queries.notification_stats(db),
+        "notifications": queries.notification_stats(db, filters=query_filters),
     }
 
 
@@ -82,9 +145,11 @@ def export_xlsx(db: Session, path) -> Path:
     for status, count in data["statuses"].items():
         summary.append([f"Статус: {status}", count])
     summary.append(["Просрочено", data["overdue"]])
+    summary.append(["Не устранено", data["not_fixed"]])
     summary.append(["Средний срок устранения, дн.", data["average_fix_days"]])
-    summary.append(["Среднее время до проверки, дн.", data["average_review_days"]])
+    summary.append(["Среднее время проверки, дн.", data["average_review_days"]])
     summary.append(["Возвратов на доработку", data["rework_returns"]])
+    summary.append(["Процент выполнения", data["completion_pct"]])
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     wb.save(target)

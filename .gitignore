@@ -32,5 +32,13 @@ Desktop.ini
 
 # Сброс пароля администратора (для тестирования)
 prescriptions_system/scripts/reset_admin_password.py
-prescriptions_system/scripts/reset_admin_password.py
-prescriptions_system/scripts/reset_admin_password.py
+
+# Папка для НТД
+SK_system/docs/priors
+
+
+# Виртуальные окружения
+.venv*/
+
+# НТД (PDF нормативной базы)
+docs/priors/

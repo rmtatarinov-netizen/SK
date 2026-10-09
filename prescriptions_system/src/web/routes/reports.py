@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 import tempfile
+from datetime import date
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.db.models import User, UserRole
+from src.db.models import Enterprise, PrescriptionType, User, UserRole
 from src.reports import generator, queries
 from src.web.deps import flash, get_db, render
 from src.web.security import require_role
@@ -25,14 +27,42 @@ def dashboard(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(CAN_VIEW),
+    enterprise_id: int | None = None,
+    prescription_type: str | None = None,
+    period_type: str | None = "week",
+    date_from: str | None = None,
+    date_to: str | None = None,
 ):
-    data = generator.build_dashboard_data(db)
+    # Конвертация дат из строк (из формы) в объекты date
+    def _to_date(val):
+        try:
+            return date.fromisoformat(val) if val and val.strip() else None
+        except ValueError:
+            return None
+
+    filters = {
+        "enterprise_id": enterprise_id,
+        "prescription_type": prescription_type,
+        "period_type": period_type,
+        "date_from": _to_date(date_from),
+        "date_to": _to_date(date_to),
+    }
+    
+    data = generator.build_dashboard_data(db, filters=filters)
+    
+    # Для выпадающих списков в шаблоне
+    enterprises = db.scalars(select(Enterprise).order_by(Enterprise.name)).all()
+    prescription_types = [t.value for t in PrescriptionType]
+    
     return render(
         request,
         "reports/dashboard.html",
         user=user,
         data=data,
         data_json=json.dumps(data, ensure_ascii=False),
+        enterprises=enterprises,
+        prescription_types=prescription_types,
+        filters=filters
     )
 
 

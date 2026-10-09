@@ -9,10 +9,7 @@ from __future__ import annotations
 from datetime import date
 from types import SimpleNamespace
 
-import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import select
-from sqlalchemy.orm import sessionmaker
 
 from src.db import models as m
 from src.db.models import (
@@ -36,50 +33,10 @@ from src.prescriptions.service import change_status, create_prescription
 from src.rag.recommend import ProposedNormRef
 from src.users import service as users_service
 from src.users.schemas import UserCreate
-from src.web.app import create_app
 from src.web.routes import prescriptions as pr_routes
+from tests.conftest import _mk_user, login
 
-PASSWORD = "Secret123!"
 MCP = "must_change_password"
-
-
-def _mk_user(db, login_name, role, contractor_id=None, object_id=None):
-    user = User(
-        login=login_name,
-        full_name=f"Тест {login_name}",
-        role=role,
-        password_hash=users_service.hash_password(PASSWORD),
-        contractor_id=contractor_id,
-        object_id=object_id,
-        **{MCP: False},
-    )
-    db.add(user)
-    db.commit()
-    return user
-
-
-@pytest.fixture()
-def client(db, engine):
-    app = create_app()
-    app.state.session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    return TestClient(app, follow_redirects=False)
-
-
-@pytest.fixture()
-def persons(db, obj, contractor):
-    insp = _mk_user(db, "web_insp", UserRole.INSPECTOR, object_id=obj.id)
-    podr = _mk_user(db, "web_podr", UserRole.CONTRACTOR_RESPONSIBLE, contractor_id=contractor.id)
-    adm = _mk_user(db, "web_adm", UserRole.ADMIN)
-    other = _mk_user(db, "web_other", UserRole.CONTRACTOR_RESPONSIBLE, contractor_id=9999)
-    return SimpleNamespace(insp=insp, podr=podr, adm=adm, other=other)
-
-
-def login(client, name: str):
-    return client.post(
-        "/login",
-        data={"login": name, "password": PASSWORD},
-        follow_redirects=False,
-    )
 
 
 # --- auth --------------------------------------------------------------------

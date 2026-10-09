@@ -14,7 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from src.config import get_settings
 from src.db.engine import get_session_factory
-from src.web.routes import admin, auth, prescriptions, reports
+from src.web.routes import admin, auth, dashboards, prescriptions, reports
 from src.web.security import MustChangePasswordError
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(prescriptions.router)
     app.include_router(reports.router)
+    app.include_router(dashboards.router)
     app.include_router(admin.router)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

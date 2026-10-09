@@ -21,14 +21,57 @@
       {% if can_edit %}
       <form method="post" action="/prescriptions/{{ p.id }}/data">
         <label>Описание <textarea name="description" rows="4" cols="60">{{ p.description }}</textarea></label>
-        <label>Срок <input type="date" name="deadline" value="{{ p.deadline or '' }}"></label>
+        <label>Обоснование <textarea name="justification" rows="3" cols="60">{{ p.justification or '' }}</textarea></label>
+        <div class="row">
+          <label>Дата выдачи <input type="date" name="issue_date" value="{{ p.issue_date or '' }}"></label>
+          <label>Дата факт. устр. <input type="date" name="actual_fix_date" value="{{ p.actual_fix_date or '' }}"></label>
+          <label>Срок <input type="date" name="deadline" value="{{ p.deadline or '' }}"></label>
+        </div>
+        <div class="row">
+          <label>Категория
+            <select name="category_id">
+              <option value="">-- Нет --</option>
+              {% for cat in categories %}<option value="{{ cat.id }}" {% if p.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Вид
+            <select name="kind_id">
+              <option value="">-- Нет --</option>
+              {% for k in kinds %}<option value="{{ k.id }}" {% if p.kind_id == k.id %}selected{% endif %}>{{ k.name }}</option>{% endfor %}
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label>Упр. строительством
+            <select name="mgmt_id">
+              <option value="">-- Нет --</option>
+              {% for m in mgmt %}<option value="{{ m.id }}" {% if p.mgmt_id == m.id %}selected{% endif %}>{{ m.name }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Выдал
+            <select name="issuer_id">
+              <option value="">-- Нет --</option>
+              {% for i in issuers %}<option value="{{ i.id }}" {% if p.issuer_id == i.id %}selected{% endif %}>{{ i.name }}</option>{% endfor %}
+            </select>
+          </label>
+        </div>
         {% for item in p.items %}
           <label>Пункт {{ item.item_number }} <textarea name="item_{{ item.id }}" rows="2" cols="60">{{ item.text }}</textarea></label>
         {% endfor %}
         <button type="submit">Сохранить данные</button>
       </form>
       {% else %}
-      <p>{{ p.description }}</p>
+      <p><b>Описание:</b> {{ p.description }}</p>
+      <p><b>Обоснование:</b> {{ p.justification or '—' }}</p>
+      <p>
+        <b>Даты:</b> выдача {{ p.issue_date or '—' }} · факт. устр. {{ p.actual_fix_date or '—' }} · срок {{ p.deadline or '—' }}
+      </p>
+      <p>
+        <b>Классификация:</b> {{ p.category.name if p.category else '—' }} · {{ p.kind.name if p.kind else '—' }}
+      </p>
+      <p>
+        <b>Ответственные:</b> Упр. стр. {{ p.mgmt.name if p.mgmt else '—' }} · Выдал {{ p.issuer.name if p.issuer else '—' }}
+      </p>
       <ol>{% for item in p.items %}<li>{{ item.text }}{% if item.deadline %} · срок {{ item.deadline }}{% endif %}</li>{% endfor %}</ol>
       {% endif %}
       {% if p.source_file_path %}<p class="muted">Оригинал: {{ p.source_file_path }}</p>{% endif %}

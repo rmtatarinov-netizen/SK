@@ -50,6 +50,71 @@ def enum_col(enum_cls: type[PyEnum], name: str) -> Enum:
     return Enum(enum_cls, name=name, values_callable=_enum_values)
 
 
+class PrescriptionCategory(Base):
+    __tablename__ = "prescription_categories"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+
+class PrescriptionKind(Base):
+    __tablename__ = "prescription_kinds"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+
+class ConstructionManagement(Base):
+    __tablename__ = "construction_management"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+
+class PrescriptionInspector(Base):
+    __tablename__ = "prescription_inspectors"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+
+
+class WorkType(Base):
+    """Справочник видов работ (гибридный, M3). risk_weight — 0–10 для индексов."""
+
+    __tablename__ = "work_types"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    risk_weight: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Section(Base):
+    """Участок / корпус / захватка (дерево, M1). parent_id — вышестоящий узел."""
+
+    __tablename__ = "sections"
+    __table_args__ = (
+        UniqueConstraint("object_id", "name", "parent_id", name="uq_section_name"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    object_id: Mapped[int] = mapped_column(
+        ForeignKey("objects.id", name="fk_sections_object"), index=True
+    )
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sections.id", name="fk_sections_parent"), index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    object: Mapped[Object] = relationship()
+
+
+class OverdueReasonType(Base):
+    """Справочник причин просрочки (M4)."""
+
+    __tablename__ = "overdue_reason_types"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+
 class PrescriptionType(str, PyEnum):
     CUSTOMER = "customer"
     INTERNAL = "internal"
@@ -99,6 +164,16 @@ class ProcessedFileStatus(str, PyEnum):
 class LlmRagCallStatus(str, PyEnum):
     OK = "ok"
     ERROR = "error"
+
+
+class Enterprise(Base):
+    __tablename__ = "enterprises"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    address: Mapped[str | None] = mapped_column(String(500))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class Object(Base):
@@ -202,6 +277,8 @@ class Prescription(Base):
             name="uq_prescription_doc",
         ),
         Index("ix_prescriptions_status_deadline", "status", "deadline"),
+        Index("ix_prescriptions_object_deadline", "object_id", "deadline"),
+        Index("ix_prescriptions_contractor_status", "contractor_id", "status"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -210,6 +287,11 @@ class Prescription(Base):
     )
     doc_number: Mapped[str] = mapped_column(String(64), index=True)
     doc_date: Mapped[date] = mapped_column(Date)
+    issue_date: Mapped[date | None] = mapped_column(Date)
+    actual_fix_date: Mapped[date | None] = mapped_column(Date)
+    enterprise_id: Mapped[int | None] = mapped_column(
+        ForeignKey("enterprises.id", name="fk_prescriptions_enterprise"), index=True
+    )
     object_id: Mapped[int] = mapped_column(
         ForeignKey("objects.id", name="fk_prescriptions_object"), index=True
     )
@@ -217,7 +299,34 @@ class Prescription(Base):
         ForeignKey("contractors.id", name="fk_prescriptions_contractor"), index=True
     )
     description: Mapped[str] = mapped_column(Text)
+    justification: Mapped[str | None] = mapped_column(Text)
     deadline: Mapped[date | None] = mapped_column(Date)
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("prescription_categories.id", name="fk_prescriptions_category"), index=True
+    )
+    kind_id: Mapped[int | None] = mapped_column(
+        ForeignKey("prescription_kinds.id", name="fk_prescriptions_kind"), index=True
+    )
+    mgmt_id: Mapped[int | None] = mapped_column(
+        ForeignKey("construction_management.id", name="fk_prescriptions_mgmt"), index=True
+    )
+    issuer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("prescription_inspectors.id", name="fk_prescriptions_issuer"), index=True
+    )
+    section_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sections.id", name="fk_prescriptions_section"), index=True
+    )
+    work_type_id: Mapped[int | None] = mapped_column(
+        ForeignKey("work_types.id", name="fk_prescriptions_work_type"), index=True
+    )
+    recurrence_of_id: Mapped[int | None] = mapped_column(
+        ForeignKey("prescriptions.id", name="fk_prescriptions_recurrence_of"), index=True
+    )
+    overdue_reason_type_id: Mapped[int | None] = mapped_column(
+        ForeignKey("overdue_reason_types.id", name="fk_prescriptions_overdue_reason_type"),
+        index=True,
+    )
+    overdue_reason_text: Mapped[str | None] = mapped_column(Text)
     responsible_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", name="fk_prescriptions_responsible_user"), index=True
     )
@@ -258,8 +367,15 @@ class Prescription(Base):
         server_default=func.now(), onupdate=func.now()
     )
 
+    enterprise: Mapped[Enterprise | None] = relationship()
     object: Mapped[Object] = relationship()
     contractor: Mapped[Contractor] = relationship()
+    section: Mapped[Section | None] = relationship()
+    work_type: Mapped[WorkType | None] = relationship()
+    recurrence_of: Mapped[Prescription | None] = relationship(
+        remote_side="Prescription.id", foreign_keys="Prescription.recurrence_of_id"
+    )
+    overdue_reason_type: Mapped[OverdueReasonType | None] = relationship()
     responsible_user: Mapped[User | None] = relationship(
         foreign_keys="Prescription.responsible_user_id"
     )

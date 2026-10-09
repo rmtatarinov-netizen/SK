@@ -4,6 +4,15 @@
 <h1>Справочники</h1>
 <div class="grid">
   <div class="panel">
+    <h2>Предприятия</h2>
+    <ul>{% for e in enterprises %}<li>{{ e.name }}{% if e.address %} · {{ e.address }}{% endif %}</li>{% else %}<li class="muted">Пусто</li>{% endfor %}</ul>
+    <form method="post" action="/admin/directories/enterprises" class="card-form">
+      <label>Название <input name="name" required></label>
+      <label>Адрес <input name="address"></label>
+      <button type="submit">Добавить предприятие</button>
+    </form>
+  </div>
+  <div class="panel">
     <h2>Объекты</h2>
     <ul>{% for o in objects %}<li>{{ o.name }}{% if not o.is_active %} (выключен){% endif %}</li>{% else %}<li class="muted">Пусто</li>{% endfor %}</ul>
     <form method="post" action="/admin/directories/objects" class="card-form">
@@ -19,6 +28,38 @@
       <label>Название <input name="name" required></label>
       <label>ИНН <input name="inn" maxlength="12"></label>
       <button type="submit">Добавить подрядчика</button>
+    </form>
+  </div>
+  <div class="panel">
+    <h2>Категории</h2>
+    <ul>{% for cat in categories %}<li>{{ cat.name }}</li>{% else %}<li class="muted">Пусто</li>{% endfor %}</ul>
+    <form method="post" action="/admin/directories/categories" class="card-form">
+      <label>Название <input name="name" required></label>
+      <button type="submit">Добавить категорию</button>
+    </form>
+  </div>
+  <div class="panel">
+    <h2>Виды предписаний</h2>
+    <ul>{% for k in kinds %}<li>{{ k.name }}</li>{% else %}<li class="muted">Пусто</li>{% endfor %}</ul>
+    <form method="post" action="/admin/directories/kinds" class="card-form">
+      <label>Название <input name="name" required></label>
+      <button type="submit">Добавить вид</button>
+    </form>
+  </div>
+  <div class="panel">
+    <h2>Управление строительством</h2>
+    <ul>{% for m in mgmt %}<li>{{ m.name }}</li>{% else %}<li class="muted">Пусто</li>{% endfor %}</ul>
+    <form method="post" action="/admin/directories/mgmt" class="card-form">
+      <label>Название <input name="name" required></label>
+      <button type="submit">Добавить запись</button>
+    </form>
+  </div>
+  <div class="panel">
+    <h2>Инспекторы</h2>
+    <ul>{% for i in issuers %}<li>{{ i.name }}</li>{% else %}<li class="muted">Пусто</li>{% endfor %}</ul>
+    <form method="post" action="/admin/directories/issuers" class="card-form">
+      <label>Название <input name="name" required></label>
+      <button type="submit">Добавить инспектора</button>
     </form>
   </div>
 </div>

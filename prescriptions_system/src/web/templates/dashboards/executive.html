@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Панель руководителя{% endblock %}
+{% block content %}
+<style>
+  .dash { background:#fff; }
+  .dash-filters { background:#0F2540; color:#fff; padding:10px 16px; border-radius:8px;
+                  display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px; }
+  .dash-filters label { font-size:12px; }
+  .dash-filters select, .dash-filters input { font-size:12px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(8,1fr); gap:10px; }
+  .kpi { border:1px solid #d6dde6; border-left:5px solid #9e9e9e; border-radius:8px;
+         padding:10px 12px; text-decoration:none; color:#1a1a1a; display:block; }
+  .kpi .v { font-size:28px; font-weight:700; line-height:1.1; }
+  .kpi .l { font-size:12px; color:#4a5568; }
+  .kpi .u { font-size:13px; color:#4a5568; }
+  .kpi.navy{border-left-color:#1F3A5F;} .kpi.red{border-left-color:#C0392B;} .kpi.red .v{color:#C0392B;}
+  .kpi.warn{border-left-color:#E67E22;} .kpi.warn .v{color:#E67E22;}
+  .kpi.green{border-left-color:#27AE60;} .kpi.green .v{color:#27AE60;}
+  .kpi.muted .v{color:#9e9e9e;}
+  .dash-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px; }
+  .panel h2 { font-size:14px; margin:0 0 8px; color:#0F2540; }
+  .lights { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .light { border-radius:8px; padding:10px; color:#fff; text-decoration:none; }
+  .light .v { font-size:22px; font-weight:700; }
+  .light.red{background:#C0392B;} .light.orange{background:#E67E22;} .light.green{background:#27AE60;}
+  table.dash { width:100%; border-collapse:collapse; font-size:12px; }
+  table.dash th { background:#0F2540; color:#fff; text-align:left; padding:5px 6px; position:sticky; top:0; }
+  table.dash td { border-bottom:1px solid #e5e9ef; padding:4px 6px; }
+  .tbl-wrap { max-height:360px; overflow:auto; }
+  .chip { padding:1px 7px; border-radius:10px; font-size:11px; color:#fff; }
+  .chip.critical{background:#C0392B;} .chip.high{background:#E67E22;} .chip.medium{background:#F1C40F;color:#3a2f00;}
+  .chip.controlled{background:#9e9e9e;}
+  .nd { list-style:none; padding:0; margin:0; }
+  .nd li { padding:6px 8px; border-left:4px solid #C0392B; background:#fff5f4; margin-bottom:6px; border-radius:4px; }
+  .muted { color:#9e9e9e; }
+</style>
+
+<form method="get" action="/dash/executive" class="dash-filters">
+  <label>Период
+    <select name="period_type" onchange="this.form.submit()">
+      <option value="month" {% if not active.period_type or active.period_type=='month' %}selected{% endif %}>Месяц</option>
+      <option value="week" {% if active.period_type=='week' %}selected{% endif %}>Неделя</option>
+      <option value="quarter" {% if active.period_type=='quarter' %}selected{% endif %}>Квартал</option>
+      <option value="year" {% if active.period_type=='year' %}selected{% endif %}>Год</option>
+      <option value="all" {% if active.period_type=='all' %}selected{% endif %}>Всё время</option>
+    </select>
+  </label>
+  <select name="object_id"><option value="">Все объекты</option>
+    {% for o in options.objects %}<option value="{{ o.id }}" {% if active.object_id==o.id|string %}selected{% endif %}>{{ o.name }}</option>{% endfor %}</select>
+  <select name="contractor_id"><option value="">Все подрядчики</option>
+    {% for c in options.contractors %}<option value="{{ c.id }}" {% if active.contractor_id==c.id|string %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
+  <select name="mgmt_id"><option value="">Все управления</option>
+    {% for m in options.mgmt %}<option value="{{ m.id }}" {% if active.mgmt_id==m.id|string %}selected{% endif %}>{{ m.name }}</option>{% endfor %}</select>
+  <select name="category_id"><option value="">Все категории</option>
+    {% for cat in options.categories %}<option value="{{ cat.id }}" {% if active.category_id==cat.id|string %}selected{% endif %}>{{ cat.name }}</option>{% endfor %}</select>
+  <select name="work_type_id"><option value="">Все виды работ</option>
+    {% for w in options.work_types %}<option value="{{ w.id }}" {% if active.work_type_id==w.id|string %}selected{% endif %}>{{ w.name }}</option>{% endfor %}</select>
+  <select name="responsible_id"><option value="">Все ответственные</option>
+    {% for u in options.responsible_users %}<option value="{{ u.id }}" {% if active.responsible_id==u.id|string %}selected{% endif %}>{{ u.full_name }}</option>{% endfor %}</select>
+  <button type="submit" class="secondary">Применить</button>
+  <span class="right muted" style="margin-left:auto">Данные на {{ data.today }} · всего в срезе {{ data.rows_total }}</span>
+</form>
+
+<div class="kpi-grid">
+  {% for c in data.kpi_cards %}
+  <a class="kpi {{ c.color }}" href="{{ c.href }}" title="{{ c.formula }}">
+    <div class="v">{{ c.value if c.value is not none else '—' }}</div>
+    <div class="l">{{ c.label }}</div>
+    <div class="u">{{ c.unit }}</div>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="dash-grid">
+  <div class="panel">
+    <h2>Динамика: выдано / устранено / остаток</h2>
+    <canvas id="dynChart" height="150"></canvas>
+  </div>
+  <div class="panel">
+    <h2>Светофор</h2>
+    <div class="lights">
+      {% for t in data.traffic_light %}
+      <a class="light {{ 'green' if t.color=='green' else ('orange' if t.color=='orange' else 'red') }}" href="{{ t.href }}">
+        <div class="v">{{ t.value }}</div><div>{{ t.label }}</div>
+      </a>
+      {% endfor %}
+    </div>
+    <h2 style="margin-top:12px">Требуют решения руководителя</h2>
+    <ul class="nd">
+      {% for n in data.need_decision %}
+      <li><a href="/prescriptions/{{ n.id }}">№{{ n.doc_number }}</a> · {{ n.object }} — {{ n.reason }}</li>
+      {% else %}<li class="muted" style="border:none;background:none">Критичных решений нет в срезе.</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+
+<div class="dash-grid">
+  <div class="panel">
+    <h2>Рейтинг объектов</h2>
+    <div class="tbl-wrap"><table class="dash">
+      <thead><tr><th>Объект</th><th>Откр.</th><th>Проср.</th><th>А</th><th>В срок %</th></tr></thead>
+      <tbody>
+      {% for o in data.objects[:12] %}
+        <tr>
+          <td><a href="/dash/executive?object_id={{ o.object_id }}{% for k,v in data.filters.items() %}{% if k not in ['object_id'] %}&{{k}}={{v}}{% endif %}{% endfor %}">{{ o.object }}</a></td>
+          <td>{{ o.open }}</td>
+          <td>{% if o.overdue %}<span class="chip critical">{{ o.overdue }}</span>{% else %}{{ o.overdue }}{% endif %}</td>
+          <td>{% if o.critical %}<span class="chip critical">{{ o.critical }}</span>{% else %}0{% endif %}</td>
+          <td>{{ o.on_time_pct if o.on_time_pct is not none else '—' }}</td>
+        </tr>
+      {% else %}<tr><td colspan="5" class="muted">Нет данных.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  <div class="panel">
+    <h2>Структура замечаний</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><canvas id="catChart" height="170"></canvas></div>
+      <div><canvas id="workChart" height="170"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:14px">
+  <h2>Топ-10 самых опасных открытых предписаний</h2>
+  <div class="tbl-wrap"><table class="dash">
+    <thead><tr>
+      <th>Балл</th><th>№</th><th>Объект</th><th>Участок</th><th>Вид работ</th><th>Кат.</th>
+      <th>Выдан</th><th>Срок</th><th>Проср., дн.</th><th>Ответств.</th><th>Подрядчик</th>
+      <th>Содержание</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for r in data.top10 %}
+      <tr>
+        <td><span class="chip {{ r.band }}">{{ r.score }}</span></td>
+        <td>{{ r.doc_number }}</td>
+        <td>{{ r.object }}</td>
+        <td>{{ r.section or '—' }}</td>
+        <td>{{ r.work }}</td>
+        <td>{% if r.category == 'А' %}<span class="chip critical">А</span>{% else %}{{ r.category }}{% endif %}</td>
+        <td>{{ r.issued }}</td>
+        <td>{{ r.deadline or 'нет' }}</td>
+        <td>{% if r.overdue_days %}<span class="muted" style="color:#C0392B">{{ r.overdue_days }}</span>{% else %}—{% endif %}</td>
+        <td>{{ r.responsible or 'не назначен' }}</td>
+        <td>{{ r.contractor }}</td>
+        <td title="{{ r.summary }}">{{ r.summary }}</td>
+        <td><a href="/prescriptions/{{ r.id }}">карточка</a></td>
+      </tr>
+    {% else %}<tr><td colspan="13" class="muted">Открытых предписаний нет.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<script src="/static/vendor/chart.umd.js"></script>
+<script>
+  var DATA = {{ data_json | safe }};
+  var dyn = DATA.dynamics.buckets;
+  new Chart(document.getElementById('dynChart'), {
+    data: {
+      labels: dyn.map(function(b){return b.label;}),
+      datasets: [
+        {type:'bar', label:'Выдано', data:dyn.map(function(b){return b.issued;}), backgroundColor:'#1F3A5F'},
+        {type:'bar', label:'Устранено', data:dyn.map(function(b){return b.fixed;}), backgroundColor:'#27AE60'},
+        {type:'line', label:'Остаток открытых', data:dyn.map(function(b){return b.open_balance;}), borderColor:'#C0392B', backgroundColor:'#C0392B', tension:0.2}
+      ]
+    },
+    options:{responsive:true, plugins:{legend:{position:'bottom'}}}
+  });
+  function doughnut(id, pairs){
+    new Chart(document.getElementById(id), {
+      type:'doughnut',
+      data:{labels:pairs.map(function(p){return p[0];}),
+            datasets:[{data:pairs.map(function(p){return p[1];})}]}
+    });
+  }
+  doughnut('catChart', DATA.structure_category);
+  doughnut('workChart', DATA.structure_work);
+</script>
+{% endblock %}

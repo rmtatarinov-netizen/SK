@@ -118,10 +118,18 @@ def create_prescription(
         prescription_type=data.prescription_type,
         doc_number=data.doc_number,
         doc_date=data.doc_date,
+        issue_date=data.issue_date,
+        actual_fix_date=data.actual_fix_date,
+        enterprise_id=data.enterprise_id,
         object_id=data.object_id,
         contractor_id=data.contractor_id,
         description=data.description,
+        justification=data.justification,
         deadline=data.deadline,
+        category_id=data.category_id,
+        kind_id=data.kind_id,
+        mgmt_id=data.mgmt_id,
+        issuer_id=data.issuer_id,
         responsible_user_id=data.responsible_user_id,
         inspector_user_id=inspector_id
         or (actor.id if actor is not None and actor.role == UserRole.INSPECTOR else None),
@@ -464,7 +472,12 @@ def update_prescription_data(
     *,
     actor_user_id: int,
     description: str | None = None,
+    justification: str | None = None,
     deadline: date | None = ...,  # sentinel: пропуск, если не передан
+    category_id: int | None = None,
+    kind_id: int | None = None,
+    mgmt_id: int | None = None,
+    issuer_id: int | None = None,
     item_updates: dict[int, str] | None = None,
 ) -> Prescription:
     """Правка данных предписания инспектором/администратором (Шаг 9).
@@ -492,6 +505,25 @@ def update_prescription_data(
             "new": deadline.isoformat() if deadline else None,
         }
         prescription.deadline = deadline
+
+    new_justification = justification.strip() if justification else None
+    if new_justification != prescription.justification:
+        changed["justification"] = {
+            "old": (prescription.justification or "")[:200],
+            "new": (new_justification or "")[:200],
+        }
+        prescription.justification = new_justification
+
+    for field, value in (
+        ("category_id", category_id),
+        ("kind_id", kind_id),
+        ("mgmt_id", mgmt_id),
+        ("issuer_id", issuer_id),
+    ):
+        current = getattr(prescription, field)
+        if value != current:
+            changed[field] = {"old": current, "new": value}
+            setattr(prescription, field, value)
 
     for item_id, text in (item_updates or {}).items():
         item = db.get(PrescriptionItem, item_id)

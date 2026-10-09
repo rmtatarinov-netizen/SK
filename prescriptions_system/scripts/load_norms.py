@@ -17,6 +17,8 @@ import json
 import logging
 import sys
 from pathlib import Path
+from tqdm import tqdm
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -70,7 +72,7 @@ def main() -> int:
     summary: list[dict] = []
     failures = 0
     try:
-        for path in files:
+        for path in tqdm(files, desc="Загрузка документов"):
             try:
                 if not path.exists():
                     raise FileNotFoundError(path)

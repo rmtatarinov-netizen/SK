@@ -1,43 +1,194 @@
 {% extends "base.html" %}
 {% block title %}Реестр предписаний{% endblock %}
 {% block content %}
-<h1>Реестр предписаний</h1>
-<form method="get" class="filters">
-  <select name="status">
-    <option value="">Все статусы</option>
-    {% for s in statuses %}
-      <option value="{{ s.value }}" {% if s.value == filters.status %}selected{% endif %}>{{ status_labels[s.value] }}</option>
-    {% endfor %}
-  </select>
-  <select name="object_id">
-    <option value="">Все объекты</option>
-    {% for o in objects %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}
-  </select>
-  <select name="contractor_id">
-    <option value="">Все подрядчики</option>
-    {% for c in contractors %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
-  </select>
-  <input name="q" placeholder="№ документа" value="{{ filters.q }}">
-  <button type="submit">Фильтр</button>
+<style>
+  .filters-container {
+    margin-top: 20px;
+  }
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 0;
+  }
+  .spacer {
+    height: 15px;
+  }
+  .date-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .header-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  .enterprise-select-wrapper {
+    margin-left: 15px; /* approximately 3 spaces */
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+  @media print {
+    .filters-container, .header-row, .no-print {
+      display: none !important;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+  }
+</style>
+
+<form method="get" action="/prescriptions">
+  {% set drill_keys = ['status', 'overdue', 'due_within', 'responsible_none', 'deadline_none',
+                       'critical', 'ontime', 'closed_from', 'closed_to', 'include_drafts',
+                       'section_id', 'work_type_id', 'mgmt_id', 'responsible_id'] %}
+  {% for k in drill_keys %}{% if filters.get(k) %}<input type="hidden" name="{{ k }}" value="{{ filters.get(k) }}">{% endif %}{% endfor %}
+  <div class="header-row">
+    <h1>Реестр предписаний</h1>
+    <div class="enterprise-select-wrapper">
+      <select name="enterprise_id" onchange="this.form.submit()">
+        <option value="">Все предприятия</option>
+        {% for e in enterprises %}
+          <option value="{{ e.id }}" {% if e.id|string == filters.enterprise_id %}selected{% endif %}>{{ e.name }}</option>
+        {% endfor %}
+      </select>
+      <label>Тип
+        <select name="prescription_type">
+          <option value="">Все типы</option>
+          <option value="internal" {% if filters.prescription_type == 'internal' %}selected{% endif %}>Внутреннее</option>
+          <option value="customer" {% if filters.prescription_type == 'customer' %}selected{% endif %}>Заказчика</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="filters-container">
+    <div class="spacer"></div>
+    
+    <div class="filter-row">
+      <div class="date-input-wrapper">
+        <label>Выданы (начало диапазона): </label>
+        <input type="date" name="issued_from" value="{{ filters.issued_from }}">
+      </div>
+      <div class="date-input-wrapper">
+        <label>Выданы (конец диапазона): </label>
+        <input type="date" name="issued_to" value="{{ filters.issued_to }}">
+      </div>
+    </div>
+    
+    <div class="spacer"></div>
+    
+    <div class="filter-row">
+      <div class="date-input-wrapper">
+        <label>Устранены (начало диапазона): </label>
+        <input type="date" name="fixed_from" value="{{ filters.fixed_from }}">
+      </div>
+      <div class="date-input-wrapper">
+        <label>Устранены (конец диапазона): </label>
+        <input type="date" name="fixed_to" value="{{ filters.fixed_to }}">
+      </div>
+    </div>
+    
+    <div class="spacer"></div>
+    
+    <div class="filter-row">
+      <input name="q" placeholder="№ документа" value="{{ filters.q }}">
+      <select name="object_id">
+        <option value="">Все объекты</option>
+        {% for o in objects %}<option value="{{ o.id }}" {% if o.id|string == filters.object_id %}selected{% endif %}>{{ o.name }}</option>{% endfor %}
+      </select>
+      <select name="contractor_id">
+        <option value="">Все подрядчики</option>
+        {% for c in contractors %}<option value="{{ c.id }}" {% if c.id|string == filters.contractor_id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+      </select>
+      <select name="category_id">
+        <option value="">Все категории</option>
+        {% for cat in categories %}<option value="{{ cat.id }}" {% if cat.id|string == filters.category_id %}selected{% endif %}>{{ cat.name }}</option>{% endfor %}
+      </select>
+      <select name="kind_id">
+        <option value="">Все виды</option>
+        {% for k in kinds %}<option value="{{ k.id }}" {% if k.id|string == filters.kind_id %}selected{% endif %}>{{ k.name }}</option>{% endfor %}
+      </select>
+    </div>
+    
+    <div class="spacer"></div>
+    
+    <div class="filter-row">
+      <label>ФИО отв. за устр.: 
+        <select name="responsible_q">
+          <option value="">Все ответственные</option>
+          {% for u in responsible_users %}
+            <option value="{{ u.full_name }}" {% if u.full_name == filters.responsible_q %}selected{% endif %}>{{ u.full_name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Инспектор: 
+        <select name="inspector_q">
+          <option value="">Все инспекторы</option>
+          {% for u in inspector_users %}
+            <option value="{{ u.full_name }}" {% if u.full_name == filters.inspector_q %}selected{% endif %}>{{ u.full_name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">Фильтр</button>
+      <button type="button" onclick="window.print()">Печать</button>
+    </div>
+  </div>
 </form>
 
+<form method="post" action="/prescriptions/import" enctype="multipart/form-data"
+      class="filter-row no-print" style="margin-top: 15px;">
+  <input type="file" name="file" accept=".csv,.xlsx" required>
+  <button type="submit">Импорт из CSV/XLSX</button>
+  <a href="/prescriptions/import/template.csv">Шаблон импорта</a>
+</form>
+
+<div class="spacer"></div>
+
 <table>
-  <thead><tr><th>№</th><th>Дата</th><th>Тип</th><th>Объект</th><th>Подрядчик</th><th>Статус</th><th>Срок</th></tr></thead>
-  <tbody>
-  {% for row in rows %}
-    {% set p = row.p %}
-    <tr class="{{ 'overdue' if row.overdue }}">
-      <td><a href="/prescriptions/{{ p.id }}">{{ p.doc_number }}</a></td>
-      <td>{{ p.doc_date }}</td>
-      <td>{{ p.prescription_type.value }}</td>
-      <td>{{ p.object.name if p.object else '—' }}</td>
-      <td>{{ p.contractor.name if p.contractor else '—' }}</td>
-      <td>{{ status_labels[p.status.value] }}{% if p.requires_review %} <span class="badge">нужна проверка</span>{% endif %}</td>
-      <td>{{ p.deadline if p.deadline else '—' }}{% if row.overdue %} <span class="badge red">просрочен</span>{% endif %}</td>
+  <thead>
+    <tr>
+      <th>№</th>
+      <th>Дата выдачи</th>
+      <th>Дата устранения</th>
+      <th>Тип</th>
+      <th>Объект</th>
+      <th>Подрядчик</th>
+      <th>Категория</th>
+      <th>Вид</th>
+      <th>Описание нарушений</th>
+      <th>ФИО отв. за устр.</th>
+      <th>Инспектор</th>
+      <th>Статус</th>
+      <th>Срок</th>
     </tr>
-  {% else %}
-    <tr><td colspan="7">Нет данных.</td></tr>
-  {% endfor %}
+  </thead>
+  <tbody>
+    {% for row in rows %}
+      {% set p = row.p %}
+      <tr class="{{ 'overdue' if row.overdue }}">
+        <td><a href="/prescriptions/{{ p.id }}">{{ p.doc_number }}</a></td>
+        <td>{{ p.doc_date }}</td>
+        <td>{{ p.actual_fix_date if p.actual_fix_date else '—' }}</td>
+        <td>{{ p.prescription_type.value }}</td>
+        <td>{{ p.object.name if p.object else '—' }}</td>
+        <td>{{ p.contractor.name if p.contractor else '—' }}</td>
+        <td>{{ p.category.name if p.category else '—' }}</td>
+        <td>{{ p.kind.name if p.kind else '—' }}</td>
+        <td>{{ p.description }}</td>
+        <td>{{ p.responsible_user.full_name if p.responsible_user else '—' }}</td>
+        <td>{{ p.inspector_user.full_name if p.inspector_user else '—' }}</td>
+        <td>{{ status_labels[p.status.value] }}{% if p.requires_review %} <span class="badge">нужна проверка</span>{% endif %}</td>
+        <td>{{ p.deadline if p.deadline else '—' }}{% if row.overdue %} <span class="badge red">просрочен {{ row.overdue_days }} дн.</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="13">Нет данных.</td></tr>
+    {% endfor %}
   </tbody>
 </table>
 {% endblock %}
+
