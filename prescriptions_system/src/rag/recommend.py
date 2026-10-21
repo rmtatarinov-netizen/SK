@@ -5,6 +5,10 @@ LLM выбирает ТОЛЬКО переданные фрагменты (по 
 что код существует в norm_docs — ссылка, отсутствующая в загруженной базе,
 не будет выдана никогда. Результат — только suggested, подтверждает
 инспектор (отделение предложений от подтверждённых).
+
+Текст обоснования (build_justification) собирается из тех же предложений:
+код, пункт, причина и дословная выдержка фрагмента. Дополнительного
+вызова LLM не требуется — обоснование проверяемо по исходной норме.
 """
 
 from __future__ import annotations
@@ -49,6 +53,7 @@ def recommend_for_text(
     db: Session | None = None,
     top_k: int | None = None,
     prompt_version: str = RECOMMEND_NORMS_VERSION,
+    prescription_id: int | None = None,
 ) -> list[ProposedNormRef]:
     hits = search_topk(collection, query_text, top_k)
     if not hits:
@@ -109,6 +114,7 @@ def recommend_for_text(
                 purpose="recommend_norms",
                 model=getattr(client, "model", "?"),
                 prompt_version=prompt_version,
+                prescription_id=prescription_id,
                 input_text=prompt[:20000],
                 output_text=(result.raw or "")[:20000],
                 status=(
@@ -159,3 +165,60 @@ def save_proposed_refs(
     if created and commit:
         db.commit()
     return created
+
+
+JUSTIFICATION_HEADER = (
+    "Обоснование подобрано RAG по загруженной нормативной базе "
+    "(требует проверки инспектором):"
+)
+
+
+def build_justification(
+    refs: list[ProposedNormRef], *, max_fragment_chars: int = 300
+) -> str:
+    """Собрать текст обоснования из предложенных ссылок.
+
+    Текст детерминирован: код, пункт и причина берутся из предложений RAG,
+    выдержка фрагмента приводится дословно. Ничего не домысливается, поэтому
+    обоснование можно сверить с исходным фрагментом нормы.
+    """
+    if not refs:
+        return ""
+    lines = [JUSTIFICATION_HEADER]
+    for number, ref in enumerate(refs, start=1):
+        point = f", п. {ref.item}" if ref.item else ""
+        reason = f" — {ref.reason}" if ref.reason else ""
+        lines.append(f"{number}. {ref.doc_code}{point}{reason}")
+        fragment = (ref.fragment or "").strip()
+        if fragment:
+            snippet = fragment[:max_fragment_chars]
+            if len(fragment) > max_fragment_chars:
+                snippet = snippet.rsplit(" ", 1)[0] + "…"
+            lines.append(f"   Фрагмент: «{snippet}»")
+    return "\n".join(lines)
+
+
+def generate_justification(
+    client,
+    collection,
+    query_text: str,
+    *,
+    db: Session | None = None,
+    top_k: int | None = None,
+    prescription_id: int | None = None,
+    max_fragment_chars: int = 300,
+) -> tuple[list[ProposedNormRef], str]:
+    """Подобрать нормы по тексту и собрать из них текст обоснования.
+
+    Возвращает предложения и готовый текст. Пустой текст означает, что
+    подходящих пунктов в загруженной базе не найдено (норматив не выдумывается).
+    """
+    refs = recommend_for_text(
+        client,
+        collection,
+        query_text,
+        db=db,
+        top_k=top_k,
+        prescription_id=prescription_id,
+    )
+    return refs, build_justification(refs, max_fragment_chars=max_fragment_chars)

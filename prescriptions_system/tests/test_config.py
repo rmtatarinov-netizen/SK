@@ -6,7 +6,7 @@ from src.config import PROJECT_ROOT, get_settings
 def test_settings_loaded_from_yaml():
     s = get_settings()
     assert s.app.name == "prescriptions_system"
-    assert s.ollama.llm_model == "qwen2.5:7b-instruct"
+    assert s.ollama.llm_model == "qwen2.5:7b"
     assert s.ollama.embed_model == "bge-m3"
     assert s.rag.collection == "norm_docs"
     assert s.rag.top_k == 5

@@ -235,14 +235,18 @@ def test_suggest_norms_rag_route(db, client, persons, prescription, monkeypatch)
             chunk_id=None, reason="r", distance=None,
         )
     ]
+    justification = "1. СП 63.13330.2018, п. 5.3 — r\n   Фрагмент: «фрагмент»"
     from src.rag import recommend as rr
 
+    # Маршрут вызывает generate_justification — мок должен повторять
+    # реальную сигнатуру (регрессия: раньше мок скрывал TypeError).
     monkeypatch.setattr(
         pr_routes,
         "rag_recommend",
         SimpleNamespace(
-            recommend_for_text=lambda *a, **k: fake_rec,
+            generate_justification=lambda *a, **k: (fake_rec, justification),
             save_proposed_refs=rr.save_proposed_refs,
+            build_justification=rr.build_justification,
         ),
     )
     login(client, "web_insp")
@@ -258,6 +262,8 @@ def test_suggest_norms_rag_route(db, client, persons, prescription, monkeypatch)
         )
     ).all()
     assert [s.doc_code for s in saved] == ["СП 63.13330.2018"]
+    db.refresh(item)
+    assert item.justification == justification
 
 
 def test_attachment_upload_and_dedup(

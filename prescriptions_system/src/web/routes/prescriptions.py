@@ -630,13 +630,69 @@ def suggest_norms_route(
     try:
         client = OllamaClient()
         collection = get_collection()
-        proposals = rag_recommend.recommend_for_text(
+        proposals, justification = rag_recommend.generate_justification(
             client, collection, item.text, db=db, prescription_id=prescription.id
         )
         saved = rag_recommend.save_proposed_refs(
             db, prescription, proposals, item_id=item.id
         )
-        flash(request, f"RAG предложил ссылок: {len(proosals)}, новых: {saved}.")
+        if justification:
+            prescriptions_service.apply_generated_justification(
+                db,
+                prescription,
+                prescription.justification or "",
+                actor_user_id=user.id,
+                item_justifications={item.id: justification},
+            )
+        flash(request, f"RAG предложил ссылок: {len(proposals)}, новых: {saved}.")
+    except Exception as exc:
+        db.rollback()
+        flash(request, f"RAG/LLM недоступен: {exc}")
+    return RedirectResponse(f"/prescriptions/{prescription_id}", status_code=303)
+
+
+@router.post("/{prescription_id}/justification")
+def justify_route(
+    request: Request,
+    prescription_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role(UserRole.INSPECTOR, UserRole.ADMIN)),
+):
+    """Подобрать нормы по всем пунктам и подставить обоснование в карточку.
+
+    Результат — suggested-ссылки плюс обоснование по каждому пункту
+    (prescription_items.justification) и сводное (prescriptions.justification).
+    """
+    prescription = db.get(Prescription, prescription_id)
+    if prescription is None:
+        return RedirectResponse("/prescriptions", status_code=303)
+    try:
+        client = OllamaClient()
+        collection = get_collection()
+        all_refs: list = []
+        item_justifications: dict[int, str] = {}
+        for item in prescription.items:
+            refs, justification = rag_recommend.generate_justification(
+                client, collection, item.text, db=db, prescription_id=prescription.id
+            )
+            rag_recommend.save_proposed_refs(db, prescription, refs, item_id=item.id)
+            all_refs.extend(refs)
+            if justification:
+                item_justifications[item.id] = justification
+        combined = rag_recommend.build_justification(all_refs)
+        saved = prescriptions_service.apply_generated_justification(
+            db,
+            prescription,
+            combined,
+            actor_user_id=user.id,
+            item_justifications=item_justifications,
+        )
+        flash(
+            request,
+            f"RAG подобрал ссылок: {len(all_refs)}, пунктов с обоснованием: "
+            f"{len(item_justifications)}. Обоснование "
+            f"{'сохранено' if saved else 'не изменилось'}.",
+        )
     except Exception as exc:
         db.rollback()
         flash(request, f"RAG/LLM недоступен: {exc}")

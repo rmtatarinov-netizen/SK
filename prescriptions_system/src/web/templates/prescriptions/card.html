@@ -57,6 +57,9 @@
         </div>
         {% for item in p.items %}
           <label>Пункт {{ item.item_number }} <textarea name="item_{{ item.id }}" rows="2" cols="60">{{ item.text }}</textarea></label>
+          {% if item.justification %}
+          <div class="muted">Обоснование к п.{{ item.item_number }}: {{ item.justification }}</div>
+          {% endif %}
         {% endfor %}
         <button type="submit">Сохранить данные</button>
       </form>
@@ -72,7 +75,9 @@
       <p>
         <b>Ответственные:</b> Упр. стр. {{ p.mgmt.name if p.mgmt else '—' }} · Выдал {{ p.issuer.name if p.issuer else '—' }}
       </p>
-      <ol>{% for item in p.items %}<li>{{ item.text }}{% if item.deadline %} · срок {{ item.deadline }}{% endif %}</li>{% endfor %}</ol>
+      <ol>{% for item in p.items %}<li>{{ item.text }}{% if item.deadline %} · срок {{ item.deadline }}{% endif %}
+        {% if item.justification %}<div class="muted"><b>Обоснование:</b> {{ item.justification }}</div>{% endif %}
+      </li>{% endfor %}</ol>
       {% endif %}
       {% if p.source_file_path %}<p class="muted">Оригинал: {{ p.source_file_path }}</p>{% endif %}
     </div>
@@ -163,6 +168,9 @@
       {% endif %}
       {% if can_edit %}
       <h3>Подбор норм по пункту (RAG)</h3>
+      <form method="post" action="/prescriptions/{{ p.id }}/justification" class="inline" style="margin-bottom:8px">
+        <button type="submit">Подобрать и подставить обоснование (RAG)</button>
+      </form>
       {% for item in p.items %}
       <form method="post" action="/prescriptions/{{ p.id }}/items/{{ item.id }}/suggest-norms" class="inline">
         <button type="submit" class="secondary">Подобрать к п.{{ item.item_number }}</button>

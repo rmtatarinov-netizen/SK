@@ -14,6 +14,8 @@ prescriptions_system/logs/
 prescriptions_system/data/**
 !prescriptions_system/data/**/
 !prescriptions_system/data/**/*.gitkeep
+# Тестовая фикстура RAG (синтетические данные, нужны тестам и скриптам)
+!prescriptions_system/data/testdata/rag_test_prescription.json
 prescriptions_system/backups/
 
 # Кэш тестов и покрытия

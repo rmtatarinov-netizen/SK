@@ -479,6 +479,7 @@ def update_prescription_data(
     mgmt_id: int | None = None,
     issuer_id: int | None = None,
     item_updates: dict[int, str] | None = None,
+    item_justifications: dict[int, str] | None = None,
 ) -> Prescription:
     """Правка данных предписания инспектором/администратором (Шаг 9).
 
@@ -533,6 +534,18 @@ def update_prescription_data(
             changed[f"item:{item_id}"] = {"old": item.text[:200], "new": text.strip()[:200]}
             item.text = text.strip()
 
+    for item_id, text in (item_justifications or {}).items():
+        item = db.get(PrescriptionItem, item_id)
+        if item is None or item.prescription_id != prescription.id:
+            raise ValueError(f"Пункт {item_id} не принадлежит предписанию")
+        value = text.strip()
+        if value != (item.justification or "").strip():
+            changed[f"justification:item:{item_id}"] = {
+                "old": (item.justification or "")[:200],
+                "new": value[:200],
+            }
+            item.justification = value or None
+
     if changed:
         _add_history(
             db,
@@ -582,3 +595,57 @@ def confirm_norm_refs(
         )
         db.commit()
     return confirmed
+
+
+def apply_generated_justification(
+    db: Session,
+    prescription: Prescription,
+    justification: str,
+    *,
+    actor_user_id: int,
+    item_justifications: dict[int, str] | None = None,
+) -> bool:
+    """Сохранить обоснование, сгенерированное RAG, в карточку предписания.
+
+    Права и запись в историю — те же, что у ручной правки данных: это делает
+    инспектор или администратор. Возвращает False, если текст не изменился.
+
+    item_justifications — обоснование по пунктам (ключ — id пункта): попадает
+    в prescription_items.justification (колонка «Обоснование» рядом с
+    описанием нарушения). Сводное обоснование — в prescriptions.justification.
+    """
+    text = (justification or "").strip()
+    item_texts = {
+        int(item_id): (value or "").strip()
+        for item_id, value in (item_justifications or {}).items()
+        if (value or "").strip()
+    }
+    if not text and not item_texts:
+        return False
+
+    items_changed = False
+    for item_id, value in item_texts.items():
+        item = db.get(PrescriptionItem, item_id)
+        if item is None or item.prescription_id != prescription.id:
+            continue
+        if value != (item.justification or "").strip():
+            items_changed = True
+            break
+    if text == (prescription.justification or "").strip() and not items_changed:
+        return False
+
+    update_prescription_data(
+        db,
+        prescription,
+        actor_user_id=actor_user_id,
+        # пустое сводное обоснование не затирает уже сохранённое
+        justification=text or prescription.justification or None,
+        item_justifications=item_texts or None,
+        # справочные поля не трогаем: update_prescription_data трактует None
+        # как «очистить», поэтому передаём текущие значения
+        category_id=prescription.category_id,
+        kind_id=prescription.kind_id,
+        mgmt_id=prescription.mgmt_id,
+        issuer_id=prescription.issuer_id,
+    )
+    return True

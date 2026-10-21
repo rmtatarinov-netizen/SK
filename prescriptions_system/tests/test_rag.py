@@ -7,9 +7,12 @@ Ollama и сеть не используются: эмбеддинги — де�
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 
 import pytest
+from pathlib import Path
+
 from sqlalchemy import func, select
 
 from src.db.models import (
@@ -187,3 +190,23 @@ def test_save_proposed_refs_suggested_and_idempotent(db, collection, norm_text, 
     assert saved[0].source == NormRefSource.RAG
     # повторное сохранение не создаёт дубль
     assert save_proposed_refs(db, prescription, recs) == 0
+
+
+def test_ascii_chroma_path_passes_ascii_untouched(tmp_path):
+    from src.rag.search import ascii_chroma_path
+
+    p = Path("C:/ascii/directory/chroma")
+    assert ascii_chroma_path(p) == str(p)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="8.3-имена каталогов есть только на Windows")
+def test_ascii_chroma_path_shortens_nonascii(tmp_path):
+    from src.rag.search import ascii_chroma_path
+
+    p = tmp_path / "Проверка Хрома"
+    p.mkdir()
+    result = ascii_chroma_path(p)
+    if not result.isascii():
+        pytest.skip("на этом томе отключены 8.3-имена")
+    assert Path(result).exists()
+    assert Path(result).samefile(p)

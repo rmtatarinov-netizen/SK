@@ -430,6 +430,7 @@ class PrescriptionItem(Base):
     )
     item_number: Mapped[int | None] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
+    justification: Mapped[str | None] = mapped_column(Text)
     deadline: Mapped[date | None] = mapped_column(Date)
     explicit_norm_refs: Mapped[list | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

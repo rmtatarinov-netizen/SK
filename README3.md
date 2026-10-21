@@ -6,7 +6,7 @@
 
 - **Python 3.12**: Строго эта версия.
 - **Ollama**: Локальный движок для запуска LLM и эмбеддингов.
-  - Модели для загрузки: `qwen2.5:7b-instruct` (анализ текста) и `bge-m3` (эмбеддинги для RAG).
+  - Модели для загрузки: `qwen2.5:7b` (анализ текста) и `bge-m3` (эмбеддинги для RAG). Тег LLM в `config.yaml` (`ollama.llm_model`) должен совпадать с выводом `ollama list`; при необходимости используйте `qwen2.5:7b-instruct`.
 - **Git**: Инструмент управления версиями.
 
 ## 2. Установка и развертывание
@@ -37,7 +37,7 @@ python -m venv .venv-rag
 
 Убедитесь, что Ollama запущена, и выполните:
 ```powershell
-ollama pull qwen2.5:7b-instruct
+ollama pull qwen2.5:7b
 ollama pull bge-m3
 ```
 
@@ -108,4 +108,26 @@ ollama pull bge-m3
 ```powershell
 .\.venv-rag\Scripts\python.exe prescriptions_system\scripts\seed_references.py
 ```
+
+---
+
+## 7. Автоматическое обоснование (RAG)
+
+По каждому пункту предписания система ищет фрагменты загруженных норм в ChromaDB,
+просит локальную LLM выбрать подходящие пункты и формирует обоснование. Ссылки
+сохраняются как предложенные (`suggested`) — подтверждает их инспектор.
+
+- В карточке предписания: обоснование по каждому пункту и кнопка **«Подобрать и подставить обоснование (RAG)»**.
+- В реестре: колонка **«Обоснование»** сразу после «Описание нарушений».
+- В БД: `prescriptions.justification`, `prescription_items.justification`, `prescriptions_norm_refs`, журнал вызовов `llm_rag_logs`.
+
+Проверка на тестовом предписании (ничего не пишет в БД без `--apply`):
+
+```powershell
+.\.venv-rag\Scripts\python.exe prescriptions_system\scripts\seed_test_prescription.py --pdf
+.\.venv-rag\Scripts\python.exe prescriptions_system\scripts\check_rag_justification.py --report report.json
+```
+
+Подробности, коды выхода и восстановление векторного индекса — в
+`prescriptions_system/docs/rag_justification.md`.
 

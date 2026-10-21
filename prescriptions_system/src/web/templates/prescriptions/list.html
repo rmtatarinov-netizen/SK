@@ -161,6 +161,7 @@
       <th>Категория</th>
       <th>Вид</th>
       <th>Описание нарушений</th>
+      <th>Обоснование</th>
       <th>ФИО отв. за устр.</th>
       <th>Инспектор</th>
       <th>Статус</th>
@@ -180,13 +181,14 @@
         <td>{{ p.category.name if p.category else '—' }}</td>
         <td>{{ p.kind.name if p.kind else '—' }}</td>
         <td>{{ p.description }}</td>
+        <td>{{ p.justification or '—' }}</td>
         <td>{{ p.responsible_user.full_name if p.responsible_user else '—' }}</td>
         <td>{{ p.inspector_user.full_name if p.inspector_user else '—' }}</td>
         <td>{{ status_labels[p.status.value] }}{% if p.requires_review %} <span class="badge">нужна проверка</span>{% endif %}</td>
         <td>{{ p.deadline if p.deadline else '—' }}{% if row.overdue %} <span class="badge red">просрочен {{ row.overdue_days }} дн.</span>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="13">Нет данных.</td></tr>
+      <tr><td colspan="14">Нет данных.</td></tr>
     {% endfor %}
   </tbody>
 </table>

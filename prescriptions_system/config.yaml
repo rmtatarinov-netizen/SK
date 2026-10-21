@@ -9,7 +9,7 @@ db:
 
 ollama:
   base_url: http://localhost:11434
-  llm_model: qwen2.5:7b-instruct
+  llm_model: qwen2.5:7b
   embed_model: bge-m3
   timeout_s: 300
 

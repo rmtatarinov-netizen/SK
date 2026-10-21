@@ -31,7 +31,7 @@ class DbConfig(BaseModel):
 
 class OllamaConfig(BaseModel):
     base_url: str = "http://localhost:11434"
-    llm_model: str = "qwen2.5:7b-instruct"
+    llm_model: str = "qwen2.5:7b"
     embed_model: str = "bge-m3"
     timeout_s: int = 300
 
